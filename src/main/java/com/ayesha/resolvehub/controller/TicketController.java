@@ -1,7 +1,11 @@
 package com.ayesha.resolvehub.controller;
 
+import com.ayesha.resolvehub.dto.CreateTicketRequest;
 import com.ayesha.resolvehub.entity.Ticket;
 import com.ayesha.resolvehub.service.TicketService;
+
+import jakarta.validation.Valid;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,5 +28,10 @@ public class TicketController {
     @GetMapping("/{id}")
     public Ticket getTicketById(@PathVariable Long id) {
         return ticketService.getTicketById(id);
+    }
+
+    @PostMapping
+    public Ticket createTicket(@Valid @RequestBody CreateTicketRequest request) {
+        return ticketService.createTicket(request);
     }
 }

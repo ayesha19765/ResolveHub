@@ -1,5 +1,6 @@
 package com.ayesha.resolvehub.service;
 
+import com.ayesha.resolvehub.dto.CreateTicketRequest;
 import com.ayesha.resolvehub.entity.Ticket;
 import org.springframework.stereotype.Service;
 
@@ -44,4 +45,24 @@ public class TicketService {
                 .findFirst()
                 .orElse(null);
     }
+    
+    public Ticket createTicket(CreateTicketRequest request) {
+
+    Long newId = tickets.stream()
+            .mapToLong(Ticket::getId)
+            .max()
+            .orElse(0) + 1;
+
+    Ticket ticket = new Ticket(
+            newId,
+            request.getTitle(),
+            request.getDescription(),
+            "OPEN",
+            request.getPriority()
+    );
+
+    tickets.add(ticket);
+
+    return ticket;
+}
 }
