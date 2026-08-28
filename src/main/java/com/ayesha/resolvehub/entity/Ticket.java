@@ -8,11 +8,15 @@ public class Ticket {
     private String status;
     private String priority;
 
-    public Ticket() {
-    }
+    public Ticket() {}
 
-    public Ticket(Long id, String title, String description,
-                  String status, String priority) {
+    public Ticket(
+        Long id,
+        String title,
+        String description,
+        String status,
+        String priority
+    ) {
         this.id = id;
         this.title = title;
         this.description = description;
