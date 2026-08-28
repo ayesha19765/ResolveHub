@@ -42,4 +42,20 @@ public class GlobalExceptionHandler {
             errors
         );
     }
+
+    @ExceptionHandler(ProjectNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleProjectNotFound(
+        ProjectNotFoundException exception
+    ) {
+        return Map.of("status", 404, "message", exception.getMessage());
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleUserNotFound(
+        UserNotFoundException exception
+    ) {
+        return Map.of("status", 404, "message", exception.getMessage());
+    }
 }
