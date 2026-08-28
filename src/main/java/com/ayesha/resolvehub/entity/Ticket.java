@@ -1,11 +1,21 @@
 package com.ayesha.resolvehub.entity;
 
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "tickets")
 public class Ticket {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String title;
+
     private String description;
+
     private String status;
+
     private String priority;
 
     public Ticket() {}
