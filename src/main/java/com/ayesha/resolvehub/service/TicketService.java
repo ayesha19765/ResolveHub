@@ -5,6 +5,8 @@ import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.entity.Ticket;
 import com.ayesha.resolvehub.exception.TicketNotFoundException;
 import com.ayesha.resolvehub.repository.TicketRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -13,8 +15,14 @@ public class TicketService {
 
     private final TicketRepository ticketRepository;
 
-    public TicketService(TicketRepository ticketRepository) {
+    private final EntityManager entityManager;
+
+    public TicketService(
+        TicketRepository ticketRepository,
+        EntityManager entityManager
+    ) {
         this.ticketRepository = ticketRepository;
+        this.entityManager = entityManager;
     }
 
     public List<Ticket> getAllTickets() {
@@ -49,17 +57,23 @@ public class TicketService {
         return ticketRepository.save(ticket);
     }
 
+    @Transactional
     public Ticket updateTicketStatus(Long id, String status) {
         Ticket ticket = getTicketById(id);
 
         ticket.setStatus(status);
 
-        return ticketRepository.save(ticket);
+        return ticket;
     }
 
     public void deleteTicket(Long id) {
         Ticket ticket = getTicketById(id);
 
         ticketRepository.delete(ticket);
+    }
+
+    @Transactional
+    public Ticket findTicketUsingEntityManager(Long id) {
+        return entityManager.find(Ticket.class, id);
     }
 }

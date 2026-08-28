@@ -56,4 +56,9 @@ public class TicketController {
     public void deleteTicket(@PathVariable Long id) {
         ticketService.deleteTicket(id);
     }
+
+    @GetMapping("/entity-manager/{id}")
+    public Ticket getTicketUsingEntityManager(@PathVariable Long id) {
+        return ticketService.findTicketUsingEntityManager(id);
+    }
 }
