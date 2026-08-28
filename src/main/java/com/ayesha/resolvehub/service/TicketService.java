@@ -67,10 +67,6 @@ public class TicketService {
     public Ticket updateTicket(Long id, UpdateTicketRequest request) {
         Ticket ticket = getTicketById(id);
 
-        if (ticket == null) {
-            return null;
-        }
-
         ticket.setTitle(request.getTitle());
         ticket.setDescription(request.getDescription());
         ticket.setPriority(request.getPriority());
@@ -80,10 +76,6 @@ public class TicketService {
 
     public Ticket updateTicketStatus(Long id, String status) {
         Ticket ticket = getTicketById(id);
-
-        if (ticket == null) {
-            return null;
-        }
 
         ticket.setStatus(status);
 
