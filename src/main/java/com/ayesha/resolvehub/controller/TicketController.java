@@ -61,4 +61,20 @@ public class TicketController {
     public Ticket getTicketUsingEntityManager(@PathVariable Long id) {
         return ticketService.findTicketUsingEntityManager(id);
     }
+
+    @GetMapping("/status/{status}")
+    public List<Ticket> getTicketsByStatus(@PathVariable String status) {
+        return ticketService.getTicketsByStatus(status);
+    }
+
+    @GetMapping
+    public List<Ticket> getTickets(
+        @RequestParam(required = false) String status
+    ) {
+        if (status != null) {
+            return ticketService.getTicketsByStatus(status);
+        }
+
+        return ticketService.getAllTickets();
+    }
 }

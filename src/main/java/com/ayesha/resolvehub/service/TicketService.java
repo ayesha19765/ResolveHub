@@ -119,4 +119,9 @@ public class TicketService {
             ticket.getReporter().getName()
         );
     }
+
+    public List<Ticket> getTicketsByStatus(String status) {
+        return ticketRepository.findByStatus(status);
+    }
+
 }
