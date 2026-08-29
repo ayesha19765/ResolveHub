@@ -13,6 +13,7 @@ import com.ayesha.resolvehub.repository.ProjectRepository;
 import com.ayesha.resolvehub.repository.TicketRepository;
 import com.ayesha.resolvehub.repository.UserRepository;
 import com.ayesha.resolvehub.repository.projection.TicketSummary;
+import com.ayesha.resolvehub.repository.specification.TicketSpecification;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -172,5 +174,28 @@ public class TicketService {
             ticket.getCreatedAt(),
             ticket.getUpdatedAt()
         );
+    }
+
+    public Page<Ticket> searchTickets(
+        String status,
+        String priority,
+        Long projectId,
+        String search,
+        int page,
+        int size
+    ) {
+        Pageable pageable = PageRequest.of(
+            page,
+            size,
+            Sort.by("createdAt").descending()
+        );
+
+        Specification<Ticket> specification = Specification
+            .where(TicketSpecification.hasStatus(status))
+            .and(TicketSpecification.hasPriority(priority))
+            .and(TicketSpecification.hasProjectId(projectId))
+            .and(TicketSpecification.titleContains(search));
+
+        return ticketRepository.findAll(specification, pageable);
     }
 }

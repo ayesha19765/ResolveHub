@@ -23,19 +23,19 @@ public class TicketResponse {
     private LocalDateTime updatedAt;
 
     public TicketResponse(
-        Long id,
-        String title,
-        String description,
-        String status,
-        String priority,
-        Long projectId,
-        String projectName,
-        Long reporterId,
-        String reporterName,
-        Long assigneeId,
-        String assigneeName,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+            Long id,
+            String title,
+            String description,
+            String status,
+            String priority,
+            Long projectId,
+            String projectName,
+            Long reporterId,
+            String reporterName,
+            Long assigneeId,
+            String assigneeName,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
     ) {
         this.id = id;
         this.title = title;

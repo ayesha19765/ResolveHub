@@ -116,4 +116,23 @@ public class TicketController {
     ) {
         return ticketService.getTickets(page, size);
     }
+
+    @GetMapping
+    public Page<Ticket> searchTickets(
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String priority,
+        @RequestParam(required = false) Long projectId,
+        @RequestParam(required = false) String search,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
+    ) {
+        return ticketService.searchTickets(
+            status,
+            priority,
+            projectId,
+            search,
+            page,
+            size
+        );
+    }
 }
