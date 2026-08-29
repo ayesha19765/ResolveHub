@@ -106,22 +106,25 @@ public class TicketService {
         return entityManager.find(Ticket.class, id);
     }
 
-    private TicketResponse toResponse(Ticket ticket) {
-        return new TicketResponse(
-            ticket.getId(),
-            ticket.getTitle(),
-            ticket.getDescription(),
-            ticket.getStatus(),
-            ticket.getPriority(),
-            ticket.getProject().getId(),
-            ticket.getProject().getName(),
-            ticket.getReporter().getId(),
-            ticket.getReporter().getName()
-        );
-    }
-
     public List<Ticket> getTicketsByStatus(String status) {
         return ticketRepository.findByStatus(status);
     }
 
+    public List<Ticket> getTicketsForAssignee(
+        String status,
+        String priority,
+        Long assigneeId
+    ) {
+        return ticketRepository.findTicketsForAssignee(
+            status,
+            priority,
+            assigneeId
+        );
+    }
+
+    public Ticket getTicketWithDetails(Long id) {
+
+    return ticketRepository.findTicketWithProjectAndReporter(id)
+            .orElseThrow(() -> new TicketNotFoundException(id));
+}
 }

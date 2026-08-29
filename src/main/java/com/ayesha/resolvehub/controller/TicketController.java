@@ -19,10 +19,10 @@ public class TicketController {
         this.ticketService = ticketService;
     }
 
-    @GetMapping
-    public List<Ticket> getAllTickets() {
-        return ticketService.getAllTickets();
-    }
+    // @GetMapping
+    // public List<Ticket> getAllTickets() {
+    //     return ticketService.getAllTickets();
+    // }
 
     @GetMapping("/{id}")
     public Ticket getTicketById(@PathVariable Long id) {
@@ -76,5 +76,28 @@ public class TicketController {
         }
 
         return ticketService.getAllTickets();
+    }
+
+    @GetMapping("/assigned")
+    public List<Ticket> getTicketsForAssignee(
+        @RequestParam String status,
+        @RequestParam String priority,
+        @RequestParam Long assigneeId
+    ) {
+        return ticketService.getTicketsForAssignee(
+            status,
+            priority,
+            assigneeId
+        );
+    }
+
+    @GetMapping("/with-projects")
+    public List<Ticket> getTicketsWithProjects() {
+        return ticketService.getAllTickets();
+    }
+
+    @GetMapping("/{id}/details")
+    public Ticket getTicketWithDetails(@PathVariable Long id) {
+        return ticketService.getTicketWithDetails(id);
     }
 }
