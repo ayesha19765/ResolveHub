@@ -1,5 +1,7 @@
 package com.ayesha.resolvehub.dto;
 
+import java.time.LocalDateTime;
+
 public class TicketResponse {
 
     private Long id;
@@ -14,16 +16,26 @@ public class TicketResponse {
     private Long reporterId;
     private String reporterName;
 
+    private Long assigneeId;
+    private String assigneeName;
+
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
     public TicketResponse(
-            Long id,
-            String title,
-            String description,
-            String status,
-            String priority,
-            Long projectId,
-            String projectName,
-            Long reporterId,
-            String reporterName
+        Long id,
+        String title,
+        String description,
+        String status,
+        String priority,
+        Long projectId,
+        String projectName,
+        Long reporterId,
+        String reporterName,
+        Long assigneeId,
+        String assigneeName,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
     ) {
         this.id = id;
         this.title = title;
@@ -34,6 +46,10 @@ public class TicketResponse {
         this.projectName = projectName;
         this.reporterId = reporterId;
         this.reporterName = reporterName;
+        this.assigneeId = assigneeId;
+        this.assigneeName = assigneeName;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
     }
 
     public Long getId() {
@@ -70,5 +86,21 @@ public class TicketResponse {
 
     public String getReporterName() {
         return reporterName;
+    }
+
+    public Long getAssigneeId() {
+        return assigneeId;
+    }
+
+    public String getAssigneeName() {
+        return assigneeName;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
     }
 }

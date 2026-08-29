@@ -1,6 +1,7 @@
 package com.ayesha.resolvehub.service;
 
 import com.ayesha.resolvehub.dto.CreateTicketRequest;
+import com.ayesha.resolvehub.dto.TicketResponse;
 import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.entity.Project;
 import com.ayesha.resolvehub.entity.Ticket;
@@ -26,9 +27,7 @@ public class TicketService {
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
-
     private final TicketRepository ticketRepository;
-
     private final EntityManager entityManager;
 
     public TicketService(
@@ -47,13 +46,20 @@ public class TicketService {
         return ticketRepository.findAll();
     }
 
-    public Ticket getTicketById(Long id) {
+    // Used when the controller needs a response DTO
+    public TicketResponse getTicketById(Long id) {
+        Ticket ticket = getTicketEntityById(id);
+        return toResponse(ticket);
+    }
+
+    // Used internally when the service needs the actual entity
+    private Ticket getTicketEntityById(Long id) {
         return ticketRepository
             .findById(id)
             .orElseThrow(() -> new TicketNotFoundException(id));
     }
 
-    public Ticket createTicket(CreateTicketRequest request) {
+    public TicketResponse createTicket(CreateTicketRequest request) {
         Project project = projectRepository
             .findById(request.getProjectId())
             .orElseThrow(() ->
@@ -76,11 +82,13 @@ public class TicketService {
         ticket.setProject(project);
         ticket.setReporter(reporter);
 
-        return ticketRepository.save(ticket);
+        Ticket savedTicket = ticketRepository.save(ticket);
+
+        return toResponse(savedTicket);
     }
 
     public Ticket updateTicket(Long id, UpdateTicketRequest request) {
-        Ticket ticket = getTicketById(id);
+        Ticket ticket = getTicketEntityById(id);
 
         ticket.setTitle(request.getTitle());
         ticket.setDescription(request.getDescription());
@@ -91,7 +99,7 @@ public class TicketService {
 
     @Transactional
     public Ticket updateTicketStatus(Long id, String status) {
-        Ticket ticket = getTicketById(id);
+        Ticket ticket = getTicketEntityById(id);
 
         ticket.setStatus(status);
 
@@ -99,8 +107,7 @@ public class TicketService {
     }
 
     public void deleteTicket(Long id) {
-        Ticket ticket = getTicketById(id);
-
+        Ticket ticket = getTicketEntityById(id);
         ticketRepository.delete(ticket);
     }
 
@@ -143,5 +150,27 @@ public class TicketService {
         );
 
         return ticketRepository.findAll(pageable);
+    }
+
+    private TicketResponse toResponse(Ticket ticket) {
+        return new TicketResponse(
+            ticket.getId(),
+            ticket.getTitle(),
+            ticket.getDescription(),
+            ticket.getStatus(),
+            ticket.getPriority(),
+            ticket.getProject() != null ? ticket.getProject().getId() : null,
+            ticket.getProject() != null ? ticket.getProject().getName() : null,
+            ticket.getReporter() != null ? ticket.getReporter().getId() : null,
+            ticket.getReporter() != null
+                ? ticket.getReporter().getName()
+                : null,
+            ticket.getAssignee() != null ? ticket.getAssignee().getId() : null,
+            ticket.getAssignee() != null
+                ? ticket.getAssignee().getName()
+                : null,
+            ticket.getCreatedAt(),
+            ticket.getUpdatedAt()
+        );
     }
 }

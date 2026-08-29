@@ -1,6 +1,7 @@
 package com.ayesha.resolvehub.controller;
 
 import com.ayesha.resolvehub.dto.CreateTicketRequest;
+import com.ayesha.resolvehub.dto.TicketResponse;
 import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.dto.UpdateTicketStatusRequest;
 import com.ayesha.resolvehub.entity.Ticket;
@@ -27,12 +28,12 @@ public class TicketController {
     // }
 
     @GetMapping("/{id}")
-    public Ticket getTicketById(@PathVariable Long id) {
+    public TicketResponse getTicketById(@PathVariable Long id) {
         return ticketService.getTicketById(id);
     }
 
     @PostMapping
-    public Ticket createTicket(
+    public TicketResponse createTicket(
         @Valid @RequestBody CreateTicketRequest request
     ) {
         return ticketService.createTicket(request);
