@@ -6,66 +6,82 @@
 [![Database](https://img.shields.io/badge/Database-PostgreSQL-blue)](https://www.postgresql.org/)
 [![ORM](https://img.shields.io/badge/ORM-Hibernate-brown)](https://hibernate.org/)
 
-A backend issue-tracking and resolution platform built with **Spring Boot, Spring MVC, Spring Data JPA, Hibernate, and PostgreSQL**.
+**ResolveHub** is a backend issue-tracking and resolution platform built with **Java, Spring Boot, Spring MVC, Spring Data JPA, Hibernate, and PostgreSQL**.
 
-ResolveHub is designed to model the backend of a real-world ticket management system where users can create, manage, assign, filter, and track issues across projects.
+The system models a real-world ticket management workflow where users can create, assign, update, filter, and track issues across projects.
 
-The project goes beyond basic CRUD by exploring **REST API design, request validation, relational data modeling, JPA querying, pagination, projections, dynamic filtering, transaction management, and ORM performance optimization**.
-
----
-
-## Highlights
-
-- RESTful APIs for ticket management
-- Layered architecture using Controller, Service, Repository, and DTOs
-- Request validation using Jakarta Bean Validation
-- Relational entity mapping using JPA and Hibernate
-- Spring Data JPA derived query methods
-- Custom JPQL and native SQL queries
-- Dynamic filtering using JPA Specifications
-- Pagination and sorting for large result sets
-- Interface-based projections for optimized read operations
-- Lazy loading and relationship management
-- N+1 query problem analysis and optimization using `JOIN FETCH`
-- Persistence Context and Hibernate dirty checking
-- EntityManager-based persistence operations
-- PostgreSQL-backed persistent storage
+The project focuses on building a maintainable REST backend while addressing practical concerns around **relational data modeling, dynamic querying, pagination, transaction management, and ORM performance**.
 
 ---
 
-## System Architecture
+## Features
+
+* RESTful APIs for project and ticket management
+* Layered architecture with Controller, Service, Repository, and DTO layers
+* Request validation using Jakarta Bean Validation
+* Relational entity mapping using JPA and Hibernate
+* Ticket assignment and project relationships
+* Dynamic ticket filtering using JPA Specifications
+* Pagination and sorting for ticket listings
+* Interface-based projections for lightweight read operations
+* Derived Spring Data JPA queries
+* Custom JPQL and native SQL queries
+* Transactional persistence and Hibernate dirty checking
+* Lazy loading and relationship management
+* N+1 query analysis and optimization using `JOIN FETCH`
+* PostgreSQL-backed persistent storage
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart TD
+
     Client["REST Client"] --> Controller["Controller Layer"]
-    Controller --> DTO["DTOs<br/>Request / Response"]
+
+    Controller --> DTO["Request / Response DTOs"]
+
     DTO --> Service["Service Layer"]
+
     Service --> Repository["Repository Layer"]
+
     Repository --> JPA["Spring Data JPA"]
+
     JPA --> Hibernate["Hibernate ORM"]
+
     Hibernate --> PostgreSQL["PostgreSQL"]
-````
+```
 
-The application follows a layered architecture where each layer has a clear responsibility.
+ResolveHub follows a layered backend architecture:
 
-The **Controller** handles HTTP requests, the **Service** contains business logic, the **Repository** handles persistence, and **Hibernate/JPA** manages the interaction between Java entities and PostgreSQL.
-
-DTOs are used to keep the API contract separate from the persistence model.
+| Layer           | Responsibility                             |
+| --------------- | ------------------------------------------ |
+| Controller      | HTTP request handling and API endpoints    |
+| DTO             | API request/response contracts             |
+| Service         | Business logic and transactional workflows |
+| Repository      | Data access and query definitions          |
+| Entity          | Persistence model and relationships        |
+| JPA / Hibernate | ORM and persistence management             |
+| PostgreSQL      | Persistent relational storage              |
 
 ---
 
 ## Domain Model
 
-ResolveHub currently revolves around three core entities:
+ResolveHub is centered around **Projects, Tickets, and Users**.
 
 ```mermaid
 flowchart TD
+
     Project["Project"] -->|1 : *| Ticket["Ticket"]
-    Ticket -->|* Reporter| Reporter["User<br/>Reporter"]
-    Ticket -->|* Assignee| Assignee["User<br/>Assignee"]
+
+    Ticket -->|Reporter| User1["User"]
+
+    Ticket -->|Assignee| User2["User"]
 ```
 
-A ticket contains information such as:
+### Ticket
 
 ```text
 Ticket
@@ -81,152 +97,105 @@ Ticket
 └── updatedAt
 ```
 
+A ticket belongs to a project and maintains relationships with users representing its reporter and assignee.
+
 ---
 
-## Key Features
+## REST API
 
-### RESTful Ticket Management
+ResolveHub exposes REST endpoints for managing tickets and querying ticket data.
 
-ResolveHub exposes REST endpoints for managing tickets using standard HTTP methods.
-
-```text
-GET       → Retrieve tickets
-POST      → Create tickets
-PUT       → Update tickets
-PATCH     → Partially update ticket state
-DELETE    → Delete tickets
-```
-
-Example:
+### Ticket Management
 
 ```http
-GET /api/tickets/1
-POST /api/tickets
-PUT /api/tickets/1
-PATCH /api/tickets/1/status
-DELETE /api/tickets/1
+GET     /api/tickets
+GET     /api/tickets/{id}
+POST    /api/tickets
+PUT     /api/tickets/{id}
+PATCH   /api/tickets/{id}/status
+DELETE  /api/tickets/{id}
 ```
 
-The request flows through Spring MVC's `DispatcherServlet`, which routes the request to the appropriate controller method.
+### Filtering & Search
 
----
+Ticket listings support multiple optional filters:
 
-### Request Validation
-
-Incoming API requests are represented using dedicated request DTOs.
-
-Validation is handled using Jakarta Bean Validation.
-
-```java
-public class CreateTicketRequest {
-
-    @NotBlank
-    private String title;
-
-    @NotBlank
-    private String description;
-}
+```http
+GET /api/tickets?status=OPEN
+GET /api/tickets?priority=HIGH
+GET /api/tickets?projectId=1
+GET /api/tickets?search=payment
 ```
 
-The controller validates incoming requests using:
+Filters can also be combined:
 
-```java
-@Valid
+```http
+GET /api/tickets?status=OPEN&priority=HIGH&projectId=1&search=payment
 ```
 
-This prevents invalid data from reaching the service and persistence layers.
+### Pagination & Sorting
 
----
-
-### DTO-Based API Design
-
-ResolveHub separates API models from JPA entities.
+```http
+GET /api/tickets?page=0&size=10
+```
 
 ```text
-                  Request
-                     │
-                     ▼
-              CreateTicketRequest
-                     │
-                     ▼
-                  Service
-                     │
-                     ▼
-                  Ticket
-                     │
-                     ▼
-               TicketResponse
-                     │
-                     ▼
-                  Response
+GET /api/tickets?page=0&size=10&sort=createdAt,desc
 ```
 
-This prevents the API from directly exposing the persistence model and gives the application control over exactly what data is returned to clients.
+Paginated responses provide information such as total elements, total pages, current page, and page size.
 
 ---
 
-## JPA & Hibernate
+## Dynamic Filtering
 
-ResolveHub uses **Spring Data JPA with Hibernate** for persistence.
-
-The application explores the complete persistence flow:
-
-```text
-Java Entity
-     │
-     ▼
-JPA
-     │
-     ▼
-Hibernate
-     │
-     ▼
-SQL
-     │
-     ▼
-PostgreSQL
-```
-
-The project also explores the JPA Persistence Context and Hibernate's dirty checking mechanism.
+Instead of maintaining separate repository methods for every possible filter combination, ResolveHub uses **JPA Specifications** to build queries dynamically.
 
 For example:
 
-```java
-ticket.setStatus("RESOLVED");
+```text
+status
+   +
+priority
+   +
+project
+   +
+search
+   ↓
+JPA Specification
+   ↓
+Dynamic Query
+   ↓
+PostgreSQL
 ```
 
-When the entity is managed inside a transaction, Hibernate can detect the modification and generate the corresponding `UPDATE` during flush/commit.
+This allows new filters to be composed without creating a large number of repository methods such as:
+
+```text
+findByStatusAndPriorityAndProjectId(...)
+findByStatusAndProjectId(...)
+findByPriorityAndProjectId(...)
+findByStatusAndPriority(...)
+...
+```
 
 ---
 
-## Database Querying
+## Querying Strategy
 
-ResolveHub intentionally demonstrates multiple approaches to querying relational data.
+ResolveHub uses multiple querying approaches depending on the use case.
 
-### Derived Query Methods
+### Derived Queries
 
-For simple queries, Spring Data JPA can derive SQL from repository method names.
+Used for straightforward repository operations:
 
 ```java
 findByStatus(String status)
 ```
 
-or:
-
-```java
-findByStatusAndPriority(
-    String status,
-    String priority
-)
-```
-
-This keeps simple repository queries concise without manually writing SQL.
-
----
-
 ### JPQL
 
-For more complex entity-oriented queries, ResolveHub uses JPQL.
+Used for entity-oriented custom queries:
 
 ```java
 @Query("""
@@ -239,13 +208,9 @@ List<Ticket> findTicketsByStatus(
 );
 ```
 
-JPQL operates on **entities and their fields** rather than directly on database tables.
-
----
-
 ### Native SQL
 
-Native queries are also used where writing database-specific SQL is useful.
+Used where direct database-level querying is appropriate:
 
 ```java
 @Query(
@@ -261,105 +226,13 @@ List<Ticket> findNativeByStatus(
 );
 ```
 
-This demonstrates the distinction between:
-
-```text
-JPQL
-→ Entity-oriented
-
-Native SQL
-→ Table/column-oriented
-```
-
----
-
-## Dynamic Filtering
-
-Real ticket systems rarely need only one fixed filter.
-
-ResolveHub supports combining optional filters using **JPA Specifications**.
-
-Example:
-
-```http
-GET /api/tickets?status=OPEN&priority=HIGH&projectId=1
-```
-
-The query can dynamically combine:
-
-```text
-Status
-   +
-Priority
-   +
-Project
-   +
-Search
-```
-
-instead of creating a separate repository method for every possible combination.
-
-Conceptually:
-
-```text
-Optional Filters
-       │
-       ▼
-JPA Specification
-       │
-       ▼
-Dynamic Query
-       │
-       ▼
-PostgreSQL
-```
-
-This avoids repository methods such as:
-
-```text
-findByStatusAndPriorityAndProjectId(...)
-findByStatusAndProjectId(...)
-findByPriorityAndProjectId(...)
-findByStatusAndPriority(...)
-...
-```
-
----
-
-## Pagination & Sorting
-
-Returning every ticket from the database is not scalable as the dataset grows.
-
-ResolveHub uses Spring Data pagination:
-
-```http
-GET /api/tickets?page=0&size=10
-```
-
-Sorting can also be applied:
-
-```java
-Sort.by("createdAt").descending()
-```
-
-The API therefore supports controlled result sizes while still providing metadata such as:
-
-```text
-Total elements
-Total pages
-Current page
-Page size
-```
+The project therefore demonstrates the practical trade-offs between **derived queries, JPQL, and native SQL**.
 
 ---
 
 ## Projections
 
-For read-heavy endpoints, returning an entire entity may be unnecessary.
-
-ResolveHub uses interface-based projections to retrieve only the fields required by a particular query.
-
-Example:
+For lightweight read operations, ResolveHub uses **interface-based projections** to retrieve only the fields required by the API.
 
 ```java
 public interface TicketSummary {
@@ -376,57 +249,33 @@ public interface TicketSummary {
 }
 ```
 
-Instead of:
-
-```text
-Database
-   ↓
-Complete Ticket Entity
-```
-
-a projection can retrieve:
-
-```text
-Database
-   ↓
-Only required fields
-```
-
-This reduces unnecessary data retrieval for lightweight read operations.
+This avoids loading the complete entity when only a small subset of fields is required.
 
 ---
 
 ## ORM Performance
 
-One of the goals of ResolveHub is to understand not only how JPA works, but also how seemingly simple ORM operations can result in inefficient database access.
+A major focus of ResolveHub is understanding and controlling the SQL generated by Hibernate.
 
 ### N+1 Query Problem
 
-A naive relationship access pattern can result in:
+When related entities are accessed inefficiently, a single ticket query can result in additional queries for related projects or users.
 
 ```text
 1 query
    ↓
-Fetch N Tickets
+N tickets
    ↓
-N additional queries
+N additional relationship queries
    ↓
-Fetch related Projects / Users
+N + 1 queries
 ```
 
-Total:
-
-```text
-N + 1 database queries
-```
-
-This becomes increasingly expensive as the number of records grows.
-
----
+ResolveHub addresses this using intentional fetching strategies where appropriate.
 
 ### JOIN FETCH
 
-For operations where related entities are required immediately, ResolveHub demonstrates `JOIN FETCH`.
+For use cases that require related entities together:
 
 ```java
 @Query("""
@@ -441,75 +290,60 @@ Optional<Ticket> findTicketWithProjectAndReporter(
 );
 ```
 
-Conceptually:
-
-```text
-Without intentional fetching
-
-Ticket Query
-     │
-     ├── Project Query
-     ├── Reporter Query
-     └── More Queries...
-
-
-With JOIN FETCH
-
-Ticket
-   │
-   ├── Project
-   └── Reporter
-
-Retrieved together
-```
-
-The goal is not to make every relationship eager, but to **choose the appropriate fetching strategy for each use case**.
+The goal is not to make relationships globally eager, but to **choose the appropriate fetching strategy based on the query and use case**.
 
 ---
 
-## API Examples
+## Persistence & Transactions
 
-### Retrieve all tickets
+ResolveHub uses JPA's **Persistence Context** and Hibernate's dirty checking to manage entity state.
 
-```http
-GET /api/tickets
+For example:
+
+```java
+ticket.setStatus("RESOLVED");
 ```
 
-### Filter by status
+When the entity is managed within a transaction, Hibernate detects the state change and synchronizes the corresponding update with the database during flush/commit.
 
-```http
-GET /api/tickets?status=OPEN
+This keeps persistence logic focused on entity state and business operations rather than manually constructing SQL updates.
+
+---
+
+## Validation & DTOs
+
+API requests are represented using dedicated DTOs rather than exposing JPA entities directly.
+
+```text
+HTTP Request
+     ↓
+CreateTicketRequest
+     ↓
+Validation
+     ↓
+Service
+     ↓
+Ticket Entity
+     ↓
+Repository
+     ↓
+PostgreSQL
 ```
 
-### Filter by priority
+Example validation:
 
-```http
-GET /api/tickets?priority=HIGH
+```java
+public class CreateTicketRequest {
+
+    @NotBlank
+    private String title;
+
+    @NotBlank
+    private String description;
+}
 ```
 
-### Filter by project
-
-```http
-GET /api/tickets?projectId=1
-```
-
-### Search by title
-
-```http
-GET /api/tickets?search=payment
-```
-
-### Pagination
-
-```http
-GET /api/tickets?page=0&size=10
-```
-
-### Combine filters
-
-```http
-GET /api/tickets?status=OPEN&priority=HIGH&projectId=1&search=payment&page=0&size=10
-```
+This keeps the API contract separate from the persistence model and prevents invalid requests from reaching the service layer.
 
 ---
 
@@ -522,33 +356,51 @@ src/
         └── com/
             └── ayesha/
                 └── resolvehub/
-                    │
                     ├── controller/
-                    │
                     ├── dto/
-                    │
                     ├── entity/
-                    │
                     ├── exception/
-                    │
                     ├── repository/
                     │   └── projection/
-                    │
                     └── service/
 ```
 
-The codebase follows a layered structure to keep HTTP handling, business logic, persistence, and API models separated.
+The package structure separates HTTP handling, business logic, persistence, API models, and exception handling.
 
 ---
 
-## Built With
+## Engineering Highlights
+
+### Relational Data Modeling
+
+Designed entity relationships between projects, tickets, reporters, and assignees using JPA/Hibernate.
+
+### Dynamic Querying
+
+Implemented composable ticket filters using **JPA Specifications** rather than maintaining repository methods for every filter combination.
+
+### Efficient Data Retrieval
+
+Used **pagination, sorting, and interface-based projections** to avoid unnecessary data retrieval for list and summary endpoints.
+
+### ORM Performance
+
+Investigated Hibernate-generated queries and addressed the **N+1 query problem** using targeted `JOIN FETCH` queries.
+
+### Persistence Management
+
+Worked with the **Persistence Context, entity lifecycle, dirty checking, and transactional operations** to understand and control Hibernate persistence behavior.
+
+---
+
+## Tech Stack
 
 | Technology         | Purpose                         |
 | ------------------ | ------------------------------- |
-| Java               | Core application development    |
+| Java 21            | Core application development    |
 | Spring Boot        | Application framework           |
 | Spring MVC         | REST API and request handling   |
-| Spring Data JPA    | Repository abstraction          |
+| Spring Data JPA    | Data access abstraction         |
 | Hibernate          | ORM implementation              |
 | PostgreSQL         | Relational database             |
 | Maven              | Build and dependency management |
@@ -561,20 +413,20 @@ The codebase follows a layered structure to keep HTTP handling, business logic, 
 
 ### Prerequisites
 
-* Java 25
+* Java 21
 * Maven
 * PostgreSQL
 
-### Clone the repository
+### Clone
 
 ```bash
 git clone https://github.com/<your-username>/ResolveHub.git
 cd ResolveHub
 ```
 
-### Configure PostgreSQL
+### Database Configuration
 
-Create a PostgreSQL database for the application and configure the datasource in:
+Create a PostgreSQL database and configure the datasource in:
 
 ```text
 src/main/resources/application.properties
@@ -603,7 +455,7 @@ mvn clean install
 mvn spring-boot:run
 ```
 
-The application will start on:
+The application runs by default on:
 
 ```text
 http://localhost:8080
@@ -611,124 +463,30 @@ http://localhost:8080
 
 ---
 
-## Current Learning Scope
-
-ResolveHub is being developed incrementally to explore practical Spring Boot backend concepts.
-
-```text
-Spring Boot
-      ↓
-Spring MVC
-      ↓
-DispatcherServlet
-      ↓
-REST APIs
-      ↓
-Request Validation
-      ↓
-DTOs
-      ↓
-Service Layer
-      ↓
-Spring Data JPA
-      ↓
-Hibernate
-      ↓
-Persistence Context
-      ↓
-EntityManager
-      ↓
-Entity Relationships
-      ↓
-Cascading
-      ↓
-Derived Queries
-      ↓
-JPQL
-      ↓
-Native SQL
-      ↓
-Projections
-      ↓
-Pagination
-      ↓
-Specifications
-      ↓
-Lazy Loading
-      ↓
-N+1 Optimization
-      ↓
-JOIN FETCH
-```
-
----
-
-## Roadmap
-
-The next stages will extend ResolveHub from a JPA-focused backend into a more complete issue-tracking system.
+<!-- ## Roadmap
 
 * [ ] Transactional ticket workflows
 * [ ] Ticket assignment workflow
 * [ ] Ticket activity/history
 * [ ] Comments and discussions
-* [ ] Business-level exception handling
-* [ ] Consistent API response structure
 * [ ] Global exception handling
-* [ ] Automated unit and integration tests
-* [ ] API documentation with OpenAPI / Swagger
+* [ ] Consistent API response structure
+* [ ] Unit and integration testing
+* [ ] OpenAPI / Swagger documentation
 * [ ] Logging and observability
-* [ ] Dockerized PostgreSQL + Spring Boot setup
+* [ ] Dockerized application and PostgreSQL
 * [ ] Production-oriented configuration
-* [ ] Final performance and database optimization
-
----
-
-## What This Project Demonstrates
-
-ResolveHub is primarily a hands-on exploration of backend engineering with Spring Boot.
-
-The project focuses on understanding **why** different Spring and JPA features are used rather than simply using them.
-
-Key concepts include:
-
-* REST API architecture
-* Dependency injection and Spring components
-* Spring MVC request lifecycle
-* DTO-based API design
-* Request validation
-* ORM and entity mapping
-* Persistence Context
-* Hibernate dirty checking
-* Entity relationships
-* Query optimization
-* JPQL vs native SQL
-* Dynamic query construction
-* Pagination
-* Projections
-* Lazy loading
-* N+1 query optimization
-* Transaction management
+* [ ] Database and API performance optimization -->
 
 ---
 
 ## Future Direction
 
-The long-term goal is to evolve ResolveHub into a production-style backend that demonstrates not only Spring Boot and JPA fundamentals, but also **transactional workflows, testing, observability, API documentation, containerization, and scalable backend design**.
+ResolveHub is being evolved toward a production-oriented issue-tracking backend, with upcoming work focused on **testing, transactional workflows, observability, API documentation, containerization, and further performance optimization**.
 
 ---
 
-Made with Java, Spring Boot, and a lot of debugging.
+**ResolveHub**
+Java · Spring Boot · JPA · Hibernate · PostgreSQL
 
-© 2026 Ayesha — ResolveHub
-
-```
-
-### One thing I'd change from your ThreadVault style
-
-For **ResolveHub**, I actually like this slightly more detailed README because the project is specifically meant to be your **Spring Boot showcase**. A recruiter can skim the top half and immediately see:
-
-> **REST + JPA + Hibernate + PostgreSQL + JPQL + Specifications + Pagination + Projections + N+1 optimization**
-
-That's a **much stronger SDE story** than simply saying "built a ticket CRUD application."
-
-And as we continue, we'll keep the README's **Roadmap** honest: once we implement transactions, activity history, tests, Swagger, Docker, etc., we'll move each item from `[ ]` to `[x]` and add the corresponding engineering explanation.
+© 2026 Ayesha
