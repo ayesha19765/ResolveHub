@@ -4,9 +4,11 @@ import com.ayesha.resolvehub.dto.CreateTicketRequest;
 import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.dto.UpdateTicketStatusRequest;
 import com.ayesha.resolvehub.entity.Ticket;
+import com.ayesha.resolvehub.repository.projection.TicketSummary;
 import com.ayesha.resolvehub.service.TicketService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -99,5 +101,18 @@ public class TicketController {
     @GetMapping("/{id}/details")
     public Ticket getTicketWithDetails(@PathVariable Long id) {
         return ticketService.getTicketWithDetails(id);
+    }
+
+    @GetMapping("/summary")
+    public List<TicketSummary> getTicketSummaries() {
+        return ticketService.getTicketSummaries();
+    }
+
+    @GetMapping("/paged")
+    public Page<Ticket> getTickets(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
+    ) {
+        return ticketService.getTickets(page, size);
     }
 }

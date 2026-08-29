@@ -1,8 +1,6 @@
 package com.ayesha.resolvehub.service;
 
 import com.ayesha.resolvehub.dto.CreateTicketRequest;
-import com.ayesha.resolvehub.dto.TicketResponse;
-import com.ayesha.resolvehub.dto.TicketResponse;
 import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.entity.Project;
 import com.ayesha.resolvehub.entity.Ticket;
@@ -13,9 +11,14 @@ import com.ayesha.resolvehub.exception.UserNotFoundException;
 import com.ayesha.resolvehub.repository.ProjectRepository;
 import com.ayesha.resolvehub.repository.TicketRepository;
 import com.ayesha.resolvehub.repository.UserRepository;
+import com.ayesha.resolvehub.repository.projection.TicketSummary;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -123,8 +126,22 @@ public class TicketService {
     }
 
     public Ticket getTicketWithDetails(Long id) {
-
-    return ticketRepository.findTicketWithProjectAndReporter(id)
+        return ticketRepository
+            .findTicketWithProjectAndReporter(id)
             .orElseThrow(() -> new TicketNotFoundException(id));
-}
+    }
+
+    public List<TicketSummary> getTicketSummaries() {
+        return ticketRepository.findTicketSummaries();
+    }
+
+    public Page<Ticket> getTickets(int page, int size) {
+        Pageable pageable = PageRequest.of(
+            page,
+            size,
+            Sort.by("createdAt").descending()
+        );
+
+        return ticketRepository.findAll(pageable);
+    }
 }

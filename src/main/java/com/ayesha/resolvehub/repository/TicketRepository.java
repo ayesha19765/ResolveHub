@@ -1,9 +1,9 @@
 package com.ayesha.resolvehub.repository;
 
 import com.ayesha.resolvehub.entity.Ticket;
+import com.ayesha.resolvehub.repository.projection.TicketSummary;
 import java.util.List;
 import java.util.Optional;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -43,6 +43,19 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
         WHERE t.id = :id
         """
     )
-    
     Optional<Ticket> findTicketWithProjectAndReporter(@Param("id") Long id);
+
+    @Query(
+        """
+        SELECT
+            t.id AS id,
+            t.title AS title,
+            t.status AS status,
+            t.priority AS priority,
+            p.name AS projectName
+        FROM Ticket t
+        JOIN t.project p
+        """
+    )
+    List<TicketSummary> findTicketSummaries();
 }
