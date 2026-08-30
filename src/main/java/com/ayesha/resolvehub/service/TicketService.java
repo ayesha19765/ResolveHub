@@ -30,10 +30,21 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class TicketService {
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+        "createdAt",
+        "updatedAt",
+        "priority",
+        "status",
+        "title",
+        "id"
+    );
 
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
@@ -335,28 +346,49 @@ public class TicketService {
         );
     }
 
-    public Page<Ticket> searchTickets(
+    public Page<TicketResponse> searchTickets(
         String status,
         String priority,
         Long projectId,
+        Long assigneeId,
+        Long reporterId,
         String search,
+        LocalDateTime createdAfter,
+        LocalDateTime createdBefore,
         int page,
-        int size
+        int size,
+        String sort,
+        String direction
     ) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 100);
+
+        String sortField = (sort != null && ALLOWED_SORT_FIELDS.contains(sort.trim()))
+            ? sort.trim()
+            : "createdAt";
+
+        Sort.Direction sortDirection = (direction != null && direction.equalsIgnoreCase("asc"))
+            ? Sort.Direction.ASC
+            : Sort.Direction.DESC;
+
         Pageable pageable = PageRequest.of(
-            page,
-            size,
-            Sort.by("createdAt").descending()
+            safePage,
+            safeSize,
+            Sort.by(sortDirection, sortField)
         );
 
         Specification<Ticket> specification = Specification.allOf(
             TicketSpecification.hasStatus(status),
             TicketSpecification.hasPriority(priority),
             TicketSpecification.hasProjectId(projectId),
-            TicketSpecification.titleContains(search)
+            TicketSpecification.hasAssigneeId(assigneeId),
+            TicketSpecification.hasReporterId(reporterId),
+            TicketSpecification.search(search),
+            TicketSpecification.createdAfter(createdAfter),
+            TicketSpecification.createdBefore(createdBefore)
         );
 
-        return ticketRepository.findAll(specification, pageable);
+        return ticketRepository.findAll(specification, pageable).map(this::toResponse);
     }
 
     @Transactional

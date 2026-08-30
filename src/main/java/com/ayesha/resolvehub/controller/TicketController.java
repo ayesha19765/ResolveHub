@@ -12,8 +12,10 @@ import com.ayesha.resolvehub.entity.Ticket;
 import com.ayesha.resolvehub.repository.projection.TicketSummary;
 import com.ayesha.resolvehub.service.TicketService;
 import jakarta.validation.Valid;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -160,21 +162,33 @@ public class TicketController {
     }
 
     @GetMapping
-    public Page<Ticket> searchTickets(
+    public Page<TicketResponse> searchTickets(
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String priority,
         @RequestParam(required = false) Long projectId,
+        @RequestParam(required = false) Long assigneeId,
+        @RequestParam(required = false) Long reporterId,
         @RequestParam(required = false) String search,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime createdAfter,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime createdBefore,
         @RequestParam(defaultValue = "0") int page,
-        @RequestParam(defaultValue = "10") int size
+        @RequestParam(defaultValue = "10") int size,
+        @RequestParam(defaultValue = "createdAt") String sort,
+        @RequestParam(defaultValue = "desc") String direction
     ) {
         return ticketService.searchTickets(
             status,
             priority,
             projectId,
+            assigneeId,
+            reporterId,
             search,
+            createdAfter,
+            createdBefore,
             page,
-            size
+            size,
+            sort,
+            direction
         );
     }
 }
