@@ -6,6 +6,7 @@ import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.entity.Project;
 import com.ayesha.resolvehub.entity.Ticket;
 import com.ayesha.resolvehub.entity.User;
+import com.ayesha.resolvehub.exception.InvalidTicketStatusTransitionException;
 import com.ayesha.resolvehub.exception.ProjectNotFoundException;
 import com.ayesha.resolvehub.exception.TicketNotFoundException;
 import com.ayesha.resolvehub.exception.UserNotFoundException;
@@ -15,14 +16,14 @@ import com.ayesha.resolvehub.repository.UserRepository;
 import com.ayesha.resolvehub.repository.projection.TicketSummary;
 import com.ayesha.resolvehub.repository.specification.TicketSpecification;
 import jakarta.persistence.EntityManager;
-import jakarta.transaction.Transactional;
-import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 
 @Service
 public class TicketService {
@@ -100,12 +101,66 @@ public class TicketService {
     }
 
     @Transactional
-    public Ticket updateTicketStatus(Long id, String status) {
+    public TicketResponse assignTicket(Long ticketId, Long assigneeId) {
+        Ticket ticket = getTicketEntityById(ticketId);
+        User assignee = userRepository
+            .findById(assigneeId)
+            .orElseThrow(() -> new UserNotFoundException(assigneeId));
+
+        ticket.setAssignee(assignee);
+
+        return toResponse(ticket);
+    }
+
+    @Transactional
+    public TicketResponse updateTicketStatus(Long id, String status) {
         Ticket ticket = getTicketEntityById(id);
+        String targetStatus = status.toUpperCase().trim();
+        validateStatusTransition(ticket.getStatus(), targetStatus);
 
-        ticket.setStatus(status);
+        ticket.setStatus(targetStatus);
 
-        return ticket;
+        return toResponse(ticket);
+    }
+
+    @Transactional
+    public TicketResponse assignTicketAndStart(Long ticketId, Long assigneeId) {
+        Ticket ticket = getTicketEntityById(ticketId);
+        User assignee = userRepository
+            .findById(assigneeId)
+            .orElseThrow(() -> new UserNotFoundException(assigneeId));
+
+        validateStatusTransition(ticket.getStatus(), "IN_PROGRESS");
+
+        ticket.setAssignee(assignee);
+        ticket.setStatus("IN_PROGRESS");
+
+        return toResponse(ticket);
+    }
+
+    private void validateStatusTransition(String currentStatus, String targetStatus) {
+        if (targetStatus == null || targetStatus.isBlank()) {
+            throw new InvalidTicketStatusTransitionException("Target status cannot be null or empty");
+        }
+
+        String current = currentStatus != null ? currentStatus.toUpperCase().trim() : "";
+        String target = targetStatus.toUpperCase().trim();
+
+        if (current.equals(target)) {
+            return;
+        }
+
+        boolean isValid = switch (current) {
+            case "OPEN" -> target.equals("IN_PROGRESS") || target.equals("CLOSED");
+            case "IN_PROGRESS" -> target.equals("RESOLVED") || target.equals("OPEN");
+            case "RESOLVED" -> target.equals("CLOSED") || target.equals("IN_PROGRESS");
+            case "CLOSED" -> false;
+            default -> false;
+        };
+
+        if (!isValid) {
+            throw new InvalidTicketStatusTransitionException(current, target);
+        }
     }
 
     public void deleteTicket(Long id) {
@@ -190,11 +245,12 @@ public class TicketService {
             Sort.by("createdAt").descending()
         );
 
-        Specification<Ticket> specification = Specification
-            .where(TicketSpecification.hasStatus(status))
-            .and(TicketSpecification.hasPriority(priority))
-            .and(TicketSpecification.hasProjectId(projectId))
-            .and(TicketSpecification.titleContains(search));
+        Specification<Ticket> specification = Specification.allOf(
+            TicketSpecification.hasStatus(status),
+            TicketSpecification.hasPriority(priority),
+            TicketSpecification.hasProjectId(projectId),
+            TicketSpecification.titleContains(search)
+        );
 
         return ticketRepository.findAll(specification, pageable);
     }

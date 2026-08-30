@@ -58,4 +58,12 @@ public class GlobalExceptionHandler {
     ) {
         return Map.of("status", 404, "message", exception.getMessage());
     }
+
+    @ExceptionHandler(InvalidTicketStatusTransitionException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> handleInvalidTicketStatusTransition(
+        InvalidTicketStatusTransitionException exception
+    ) {
+        return Map.of("status", 400, "message", exception.getMessage());
+    }
 }
