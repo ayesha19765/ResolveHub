@@ -1,25 +1,48 @@
 package com.ayesha.resolvehub.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 
+@Schema(description = "Detailed representation of a ticket")
 public class TicketResponse {
 
+    @Schema(description = "Unique ticket ID", example = "1")
     private Long id;
+
+    @Schema(description = "Ticket title", example = "Payment gateway timeout on checkout")
     private String title;
+
+    @Schema(description = "Ticket description", example = "Investigate 504 gateway timeouts when processing payments during high load.")
     private String description;
+
+    @Schema(description = "Current ticket status: OPEN, IN_PROGRESS, RESOLVED, CLOSED", example = "OPEN")
     private String status;
+
+    @Schema(description = "Priority level: LOW, MEDIUM, HIGH, CRITICAL", example = "HIGH")
     private String priority;
 
+    @Schema(description = "Project ID", example = "1")
     private Long projectId;
+
+    @Schema(description = "Project name", example = "ResolveHub Core")
     private String projectName;
 
+    @Schema(description = "Reporter user ID", example = "1")
     private Long reporterId;
+
+    @Schema(description = "Reporter user name", example = "Ayesha")
     private String reporterName;
 
+    @Schema(description = "Assignee user ID (null if unassigned)", example = "2")
     private Long assigneeId;
+
+    @Schema(description = "Assignee user name (null if unassigned)", example = "Bob Smith")
     private String assigneeName;
 
+    @Schema(description = "Timestamp when ticket was created", example = "2026-08-30T10:15:30")
     private LocalDateTime createdAt;
+
+    @Schema(description = "Timestamp when ticket was last updated", example = "2026-08-30T10:15:30")
     private LocalDateTime updatedAt;
 
     public TicketResponse(

@@ -1,17 +1,30 @@
 package com.ayesha.resolvehub.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+@Schema(description = "Standardized REST API error response")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiErrorResponse {
 
+    @Schema(description = "Timestamp when error occurred", example = "2026-08-30T18:35:00")
     private LocalDateTime timestamp;
+
+    @Schema(description = "HTTP status code", example = "404")
     private int status;
+
+    @Schema(description = "HTTP error name", example = "Not Found")
     private String error;
+
+    @Schema(description = "Descriptive error message", example = "Ticket with id 42 was not found")
     private String message;
+
+    @Schema(description = "Request URI path where error was triggered", example = "/api/tickets/42")
     private String path;
+
+    @Schema(description = "Field-level validation error messages (present only on validation failures)")
     private Map<String, String> fieldErrors;
 
     public ApiErrorResponse() {

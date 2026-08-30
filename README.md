@@ -1,35 +1,47 @@
 # ResolveHub
 
 [![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-brightgreen)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-brightgreen)](https://spring.io/projects/spring-boot)
 [![Build](https://img.shields.io/badge/Build-Maven-blue)](https://maven.apache.org/)
 [![Database](https://img.shields.io/badge/Database-PostgreSQL-blue)](https://www.postgresql.org/)
 [![ORM](https://img.shields.io/badge/ORM-Hibernate-brown)](https://hibernate.org/)
+[![Documentation](https://img.shields.io/badge/API%20Docs-OpenAPI%20%2F%20Swagger-green)](http://localhost:8081/swagger-ui.html)
+[![Tests](https://img.shields.io/badge/Tests-47%20Passed-success)](src/test/java)
 
-**ResolveHub** is a backend issue-tracking and resolution platform built with **Java, Spring Boot, Spring MVC, Spring Data JPA, Hibernate, and PostgreSQL**.
+**ResolveHub** is a backend issue-tracking and resolution platform built with **Java 21, Spring Boot, Spring MVC, Spring Data JPA, Hibernate, and PostgreSQL**.
 
-The system models a real-world ticket management workflow where users can create, assign, update, filter, and track issues across projects.
+The system models a real-world ticket management workflow where users can create, assign, update, filter, comment on, and audit issues across projects with strict state machines, database pagination, dynamic querying, and centralized exception handling.
 
-The project focuses on building a maintainable REST backend while addressing practical concerns around **relational data modeling, dynamic querying, pagination, transaction management, and ORM performance**.
+---
+
+## Table of Contents
+- [Features](#features)
+- [Architecture](#architecture)
+- [Domain Model](#domain-model)
+- [OpenAPI & Swagger UI](#openapi--swagger-ui)
+- [REST API Endpoints](#rest-api-endpoints)
+- [Dynamic Filtering & Search](#dynamic-filtering--search)
+- [Audit Activities & Comments](#audit-activities--comments)
+- [Global Exception Handling](#global-exception-handling)
+- [Environment Configuration & Profiles](#environment-configuration--profiles)
+- [Automated Testing](#automated-testing)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
 
 ---
 
 ## Features
 
-* RESTful APIs for project and ticket management
-* Layered architecture with Controller, Service, Repository, and DTO layers
-* Request validation using Jakarta Bean Validation
-* Relational entity mapping using JPA and Hibernate
-* Ticket assignment and project relationships
-* Dynamic ticket filtering using JPA Specifications
-* Pagination and sorting for ticket listings
-* Interface-based projections for lightweight read operations
-* Derived Spring Data JPA queries
-* Custom JPQL and native SQL queries
-* Transactional persistence and Hibernate dirty checking
-* Lazy loading and relationship management
-* N+1 query analysis and optimization using `JOIN FETCH`
-* PostgreSQL-backed persistent storage
+- **Layered Architecture**: Strict separation of concerns across Controller, DTO, Service, Repository, and Entity layers.
+- **Transactional State Transitions**: Enforces valid ticket status transitions (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`).
+- **Dynamic Filtering with JPA Specifications**: Composable multi-criteria search without combinatorial repository methods.
+- **Database Pagination & Whitelist Sorting**: Database-level `LIMIT`/`OFFSET` queries with sort field whitelisting to protect against injection.
+- **Automated Audit Logging**: Append-only activity history tracking ticket creation, status changes, assignments, and priority updates.
+- **Paginated Discussions**: Ticket comments with author metadata and N+1 query prevention using `@EntityGraph`.
+- **Centralized Exception Handling**: Uniform REST error responses via `@RestControllerAdvice` and `ApiErrorResponse` DTOs.
+- **Interactive OpenAPI Documentation**: Embedded Swagger UI 3.0 specification powered by Springdoc.
+- **Environment-Aware Configuration**: Profile-driven configuration (`dev`, `prod`, `test`) without hardcoded secrets.
+- **Comprehensive Automated Test Suite**: 47 automated tests covering Unit, MockMvc, JPA Data, and Integration workflows.
 
 ---
 
@@ -38,312 +50,217 @@ The project focuses on building a maintainable REST backend while addressing pra
 ```mermaid
 flowchart TD
 
-    Client["REST Client"] --> Controller["Controller Layer"]
+    Client["REST Client / Swagger UI"] --> Controller["Controller Layer (@RestController)"]
 
     Controller --> DTO["Request / Response DTOs"]
 
-    DTO --> Service["Service Layer"]
+    Controller --> ExceptionHandler["GlobalExceptionHandler (@RestControllerAdvice)"]
 
-    Service --> Repository["Repository Layer"]
+    DTO --> Service["Service Layer (@Service, @Transactional)"]
 
-    Repository --> JPA["Spring Data JPA"]
+    Service --> Repository["Repository Layer (JpaRepository, JpaSpecificationExecutor)"]
 
-    JPA --> Hibernate["Hibernate ORM"]
+    Repository --> JPA["Spring Data JPA / CriteriaBuilder"]
 
-    Hibernate --> PostgreSQL["PostgreSQL"]
+    JPA --> Hibernate["Hibernate ORM (Persistence Context, Dirty Checking)"]
+
+    Hibernate --> PostgreSQL["PostgreSQL (Production) / H2 (Testing)"]
 ```
 
-ResolveHub follows a layered backend architecture:
-
-| Layer           | Responsibility                             |
-| --------------- | ------------------------------------------ |
-| Controller      | HTTP request handling and API endpoints    |
-| DTO             | API request/response contracts             |
-| Service         | Business logic and transactional workflows |
-| Repository      | Data access and query definitions          |
-| Entity          | Persistence model and relationships        |
-| JPA / Hibernate | ORM and persistence management             |
-| PostgreSQL      | Persistent relational storage              |
+| Layer | Responsibility |
+|---|---|
+| **Controller** | HTTP request routing, parameter validation (`@Valid`), OpenAPI documentation |
+| **DTO** | Clean API request/response contracts isolating internal JPA proxies |
+| **Service** | Business logic, state machines, atomic transaction boundaries (`@Transactional`) |
+| **Repository** | Data persistence, Spring Data Specifications, `@EntityGraph` optimization |
+| **Exception Handler** | Global error translation into structured `ApiErrorResponse` |
+| **Database** | PostgreSQL relational storage |
 
 ---
 
 ## Domain Model
 
-ResolveHub is centered around **Projects, Tickets, and Users**.
-
 ```mermaid
 flowchart TD
 
-    Project["Project"] -->|1 : *| Ticket["Ticket"]
+    Project["Project"] -->|1 : N| Ticket["Ticket"]
 
-    Ticket -->|Reporter| User1["User"]
+    Ticket -->|Reporter| User1["User (Reporter)"]
 
-    Ticket -->|Assignee| User2["User"]
+    Ticket -->|Assignee| User2["User (Assignee)"]
+
+    Ticket -->|1 : N| Activity["TicketActivity (Audit Trail)"]
+
+    Ticket -->|1 : N| Comment["TicketComment (Discussions)"]
+
+    Comment -->|Author| User3["User (Author)"]
 ```
 
-### Ticket
-
-```text
-Ticket
-├── id
-├── title
-├── description
-├── status
-├── priority
-├── project
-├── reporter
-├── assignee
-├── createdAt
-└── updatedAt
-```
-
-A ticket belongs to a project and maintains relationships with users representing its reporter and assignee.
+### Entity Hierarchy
+- **Project**: Represents a project scope with a project lead.
+- **User**: System users acting as reporters, assignees, or comment authors.
+- **Ticket**: Core entity with `id`, `title`, `description`, `status`, `priority`, `project`, `reporter`, `assignee`, `createdAt`, `updatedAt`.
+- **TicketActivity**: Append-only audit record capturing action, description, oldValue, newValue, and timestamp.
+- **TicketComment**: Discussion comments mapped with lazy associations to `Ticket` and `User`.
 
 ---
 
-## REST API
+## OpenAPI & Swagger UI
 
-ResolveHub exposes REST endpoints for managing tickets and querying ticket data.
+ResolveHub includes interactive API documentation generated automatically via Springdoc OpenAPI 3.0.
 
-### Ticket Management
+- **Swagger UI**: [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html)
+- **OpenAPI JSON**: [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs)
 
-```http
-GET     /api/tickets
-GET     /api/tickets/{id}
-POST    /api/tickets
-PUT     /api/tickets/{id}
-PATCH   /api/tickets/{id}/status
-DELETE  /api/tickets/{id}
-```
-
-### Filtering & Search
-
-Ticket listings support multiple optional filters:
-
-```http
-GET /api/tickets?status=OPEN
-GET /api/tickets?priority=HIGH
-GET /api/tickets?projectId=1
-GET /api/tickets?search=payment
-```
-
-Filters can also be combined:
-
-```http
-GET /api/tickets?status=OPEN&priority=HIGH&projectId=1&search=payment
-```
-
-### Pagination & Sorting
-
-```http
-GET /api/tickets?page=0&size=10
-```
-
-```text
-GET /api/tickets?page=0&size=10&sort=createdAt,desc
-```
-
-Paginated responses provide information such as total elements, total pages, current page, and page size.
+From Swagger UI, you can inspect all endpoints, request schemas, parameters, sample payloads, and execute live API calls.
 
 ---
 
-## Dynamic Filtering
+## REST API Endpoints
 
-Instead of maintaining separate repository methods for every possible filter combination, ResolveHub uses **JPA Specifications** to build queries dynamically.
+### Ticket Management & Workflows
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/tickets` | Search tickets with dynamic filters, pagination, and sorting |
+| `GET` | `/api/tickets/{id}` | Retrieve single ticket details by ID |
+| `POST` | `/api/tickets` | Create a new ticket (initiates `OPEN` status and logs `CREATED` activity) |
+| `PUT` | `/api/tickets/{id}` | Update ticket title, description, and priority |
+| `PATCH` | `/api/tickets/{id}/assignee` | Assign ticket to user (logs `ASSIGNED` activity) |
+| `PATCH` | `/api/tickets/{id}/status` | Transition ticket status (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`) |
+| `PATCH` | `/api/tickets/{id}/assign-and-start` | Atomically assign ticket and set status to `IN_PROGRESS` |
+| `DELETE` | `/api/tickets/{id}` | Delete ticket (cascades to activities and comments) |
 
-For example:
+### Activities & Comments
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/tickets/{id}/activities` | Retrieve audit history ordered newest to oldest |
+| `POST` | `/api/tickets/{id}/comments` | Add a discussion comment to a ticket |
+| `GET` | `/api/tickets/{id}/comments` | Retrieve paginated comments for a ticket (newest first) |
 
-```text
-status
-   +
-priority
-   +
-project
-   +
-search
-   ↓
-JPA Specification
-   ↓
-Dynamic Query
-   ↓
-PostgreSQL
-```
+---
 
-This allows new filters to be composed without creating a large number of repository methods such as:
+## Dynamic Filtering & Search
 
-```text
-findByStatusAndPriorityAndProjectId(...)
-findByStatusAndProjectId(...)
-findByPriorityAndProjectId(...)
-findByStatusAndPriority(...)
-...
+The search endpoint `GET /api/tickets` uses composable **Spring Data JPA Specifications** to generate optimized SQL `WHERE` clauses dynamically:
+
+### Supported Query Parameters
+- `status`: e.g. `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`
+- `priority`: e.g. `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`
+- `projectId`: Filter by project ID
+- `assigneeId`: Filter by assigned user ID
+- `reporterId`: Filter by reporting user ID
+- `search`: Case-insensitive text search matching `title` OR `description`
+- `createdAfter` / `createdBefore`: ISO-8601 timestamps (`YYYY-MM-DDTHH:MM:SS`)
+- `page`: Page index (default `0`)
+- `size`: Page size (default `10`, max `100`)
+- `sort`: Whitelisted sort field (`createdAt`, `updatedAt`, `priority`, `status`, `title`, `id`)
+- `direction`: `asc` or `desc` (default `desc`)
+
+### Example Filter Requests
+```http
+# Filter by Status & Priority
+GET /api/tickets?status=OPEN&priority=HIGH
+
+# Filter by Project & Text Search
+GET /api/tickets?projectId=1&search=gateway&page=0&size=10
+
+# Multi-Filter with Sorting
+GET /api/tickets?status=IN_PROGRESS&assigneeId=2&sort=priority&direction=asc
 ```
 
 ---
 
-## Querying Strategy
+## Global Exception Handling
 
-ResolveHub uses multiple querying approaches depending on the use case.
+All API errors are intercepted by `GlobalExceptionHandler` (`@RestControllerAdvice`) and formatted as a consistent `ApiErrorResponse`:
 
-### Derived Queries
-
-Used for straightforward repository operations:
-
-```java
-findByStatus(String status)
-```
-
-### JPQL
-
-Used for entity-oriented custom queries:
-
-```java
-@Query("""
-    SELECT t
-    FROM Ticket t
-    WHERE t.status = :status
-""")
-List<Ticket> findTicketsByStatus(
-    @Param("status") String status
-);
-```
-
-### Native SQL
-
-Used where direct database-level querying is appropriate:
-
-```java
-@Query(
-    value = """
-        SELECT *
-        FROM tickets
-        WHERE status = :status
-    """,
-    nativeQuery = true
-)
-List<Ticket> findNativeByStatus(
-    @Param("status") String status
-);
-```
-
-The project therefore demonstrates the practical trade-offs between **derived queries, JPQL, and native SQL**.
-
----
-
-## Projections
-
-For lightweight read operations, ResolveHub uses **interface-based projections** to retrieve only the fields required by the API.
-
-```java
-public interface TicketSummary {
-
-    Long getId();
-
-    String getTitle();
-
-    String getStatus();
-
-    String getPriority();
-
-    String getProjectName();
+```json
+{
+  "timestamp": "2026-08-30T18:35:00",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Ticket with id 42 was not found",
+  "path": "/api/tickets/42"
 }
 ```
 
-This avoids loading the complete entity when only a small subset of fields is required.
-
----
-
-## ORM Performance
-
-A major focus of ResolveHub is understanding and controlling the SQL generated by Hibernate.
-
-### N+1 Query Problem
-
-When related entities are accessed inefficiently, a single ticket query can result in additional queries for related projects or users.
-
-```text
-1 query
-   ↓
-N tickets
-   ↓
-N additional relationship queries
-   ↓
-N + 1 queries
-```
-
-ResolveHub addresses this using intentional fetching strategies where appropriate.
-
-### JOIN FETCH
-
-For use cases that require related entities together:
-
-```java
-@Query("""
-    SELECT t
-    FROM Ticket t
-    JOIN FETCH t.project
-    JOIN FETCH t.reporter
-    WHERE t.id = :id
-""")
-Optional<Ticket> findTicketWithProjectAndReporter(
-    @Param("id") Long id
-);
-```
-
-The goal is not to make relationships globally eager, but to **choose the appropriate fetching strategy based on the query and use case**.
-
----
-
-## Persistence & Transactions
-
-ResolveHub uses JPA's **Persistence Context** and Hibernate's dirty checking to manage entity state.
-
-For example:
-
-```java
-ticket.setStatus("RESOLVED");
-```
-
-When the entity is managed within a transaction, Hibernate detects the state change and synchronizes the corresponding update with the database during flush/commit.
-
-This keeps persistence logic focused on entity state and business operations rather than manually constructing SQL updates.
-
----
-
-## Validation & DTOs
-
-API requests are represented using dedicated DTOs rather than exposing JPA entities directly.
-
-```text
-HTTP Request
-     ↓
-CreateTicketRequest
-     ↓
-Validation
-     ↓
-Service
-     ↓
-Ticket Entity
-     ↓
-Repository
-     ↓
-PostgreSQL
-```
-
-Example validation:
-
-```java
-public class CreateTicketRequest {
-
-    @NotBlank
-    private String title;
-
-    @NotBlank
-    private String description;
+When validation fails (`@Valid`), field errors are cleanly mapped:
+```json
+{
+  "timestamp": "2026-08-30T18:35:10",
+  "status": 400,
+  "error": "Validation Failed",
+  "message": "Request validation failed",
+  "path": "/api/tickets",
+  "fieldErrors": {
+    "title": "Title is required",
+    "projectId": "Project ID is required"
+  }
 }
 ```
 
-This keeps the API contract separate from the persistence model and prevents invalid requests from reaching the service layer.
+---
+
+## Environment Configuration & Profiles
+
+ResolveHub separates base configuration from environment-specific profiles. Hardcoded secrets are never stored in source control.
+
+### Environment Variables
+| Variable | Default Value | Description |
+|---|---|---|
+| `DB_URL` | `jdbc:postgresql://localhost:5432/resolvehub` | PostgreSQL JDBC connection URL |
+| `DB_USERNAME` | `postgres` | Database username |
+| `DB_PASSWORD` | `password` | Database password |
+| `HIBERNATE_DDL_AUTO` | `update` | Hibernate schema mode (`update`, `validate`, `none`) |
+| `SHOW_SQL` | `false` | Enable SQL query printing |
+| `SPRING_PROFILES_ACTIVE` | `dev` | Active profile (`dev`, `prod`, `test`) |
+
+### Profiles
+- **`application-dev.properties`**: Enables SQL formatting and schema updating for rapid local development.
+- **`application-prod.properties`**: Disables SQL logging and sets `ddl-auto=validate` for production safety.
+- **`application.properties` (test)**: Configures isolated in-memory H2 database for zero-dependency unit and integration testing.
+
+---
+
+## Automated Testing
+
+ResolveHub includes 47 automated tests with 100% pass rate:
+
+```bash
+mvn clean test
+```
+
+### Test Strategy
+1. **Service Unit Tests (`TicketServiceTest`)**: Mockito-based tests verifying core business logic, status state transitions, assignment rules, activity logging, and comment workflows.
+2. **Controller Tests (`TicketControllerTest`)**: Web-layer MockMvc tests verifying HTTP status codes, validation constraints, DTO mapping, and global error handling.
+3. **Repository Tests (`TicketRepositoryTest`)**: `@DataJpaTest` tests verifying derived queries, Specification filters, date boundaries, and `@EntityGraph` eager author fetching.
+4. **Integration Tests (`TicketWorkflowIntegrationTest`)**: `@SpringBootTest` end-to-end tests validating complete ticket lifecycle from creation to assignment, commenting, and auditing.
+
+---
+
+## Getting Started
+
+### Prerequisites
+- **Java 21** or later
+- **Maven 3.8+**
+- **PostgreSQL 14+** (for local development runtime)
+
+### Running Locally
+```bash
+# Clone the repository
+git clone https://github.com/ayesha/ResolveHub.git
+cd ResolveHub
+
+# (Optional) Export custom PostgreSQL credentials
+export DB_URL="jdbc:postgresql://localhost:5432/resolvehub"
+export DB_USERNAME="postgres"
+export DB_PASSWORD="your_password"
+
+# Run with Maven
+mvn spring-boot:run
+```
+
+Once started, access the API at `http://localhost:8081` and Swagger UI at `http://localhost:8081/swagger-ui.html`.
 
 ---
 
@@ -351,142 +268,32 @@ This keeps the API contract separate from the persistence model and prevents inv
 
 ```text
 src/
-└── main/
-    └── java/
-        └── com/
-            └── ayesha/
-                └── resolvehub/
-                    ├── controller/
-                    ├── dto/
-                    ├── entity/
-                    ├── exception/
-                    ├── repository/
-                    │   └── projection/
-                    └── service/
-```
-
-The package structure separates HTTP handling, business logic, persistence, API models, and exception handling.
-
----
-
-## Engineering Highlights
-
-### Relational Data Modeling
-
-Designed entity relationships between projects, tickets, reporters, and assignees using JPA/Hibernate.
-
-### Dynamic Querying
-
-Implemented composable ticket filters using **JPA Specifications** rather than maintaining repository methods for every filter combination.
-
-### Efficient Data Retrieval
-
-Used **pagination, sorting, and interface-based projections** to avoid unnecessary data retrieval for list and summary endpoints.
-
-### ORM Performance
-
-Investigated Hibernate-generated queries and addressed the **N+1 query problem** using targeted `JOIN FETCH` queries.
-
-### Persistence Management
-
-Worked with the **Persistence Context, entity lifecycle, dirty checking, and transactional operations** to understand and control Hibernate persistence behavior.
-
----
-
-## Tech Stack
-
-| Technology         | Purpose                         |
-| ------------------ | ------------------------------- |
-| Java 21            | Core application development    |
-| Spring Boot        | Application framework           |
-| Spring MVC         | REST API and request handling   |
-| Spring Data JPA    | Data access abstraction         |
-| Hibernate          | ORM implementation              |
-| PostgreSQL         | Relational database             |
-| Maven              | Build and dependency management |
-| Lombok             | Boilerplate reduction           |
-| Jakarta Validation | Request validation              |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-* Java 21
-* Maven
-* PostgreSQL
-
-### Clone
-
-```bash
-git clone https://github.com/<your-username>/ResolveHub.git
-cd ResolveHub
-```
-
-### Database Configuration
-
-Create a PostgreSQL database and configure the datasource in:
-
-```text
-src/main/resources/application.properties
-```
-
-Example:
-
-```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/resolvehub
-spring.datasource.username=postgres
-spring.datasource.password=your_password
-
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-```
-
-### Build
-
-```bash
-mvn clean install
-```
-
-### Run
-
-```bash
-mvn spring-boot:run
-```
-
-The application runs by default on:
-
-```text
-http://localhost:8080
+├── main/
+│   ├── java/com/ayesha/resolvehub/
+│   │   ├── config/             # OpenAPI and app configuration
+│   │   ├── controller/         # REST API endpoints & Swagger docs
+│   │   ├── dto/                # Request & Response DTOs with @Schema
+│   │   ├── entity/             # JPA Entities (Ticket, User, Project, Activity, Comment)
+│   │   ├── exception/          # Domain exceptions & GlobalExceptionHandler
+│   │   ├── repository/         # Spring Data repositories & JPA Specifications
+│   │   │   ├── projection/     # Interface-based projections (TicketSummary)
+│   │   │   └── specification/  # Composable Specifications (TicketSpecification)
+│   │   └── service/            # Transactional business logic
+│   └── resources/
+│       ├── application.properties
+│       ├── application-dev.properties
+│       └── application-prod.properties
+└── test/
+    ├── java/com/ayesha/resolvehub/
+    │   ├── controller/         # TicketControllerTest (MockMvc)
+    │   ├── integration/        # TicketWorkflowIntegrationTest (SpringBootTest)
+    │   ├── repository/         # TicketRepositoryTest (DataJpaTest)
+    │   └── service/            # TicketServiceTest (Mockito)
+    └── resources/
+        └── application.properties # Isolated H2 test config
 ```
 
 ---
 
-<!-- ## Roadmap
-
-* [ ] Transactional ticket workflows
-* [ ] Ticket assignment workflow
-* [ ] Ticket activity/history
-* [ ] Comments and discussions
-* [ ] Global exception handling
-* [ ] Consistent API response structure
-* [ ] Unit and integration testing
-* [ ] OpenAPI / Swagger documentation
-* [ ] Logging and observability
-* [ ] Dockerized application and PostgreSQL
-* [ ] Production-oriented configuration
-* [ ] Database and API performance optimization -->
-
----
-
-## Future Direction
-
-ResolveHub is being evolved toward a production-oriented issue-tracking backend, with upcoming work focused on **testing, transactional workflows, observability, API documentation, containerization, and further performance optimization**.
-
----
-
-**ResolveHub**
-Java · Spring Boot · JPA · Hibernate · PostgreSQL
-
+**ResolveHub** · Java 21 · Spring Boot 3.5.5 · PostgreSQL · Hibernate · OpenAPI 3.0  
 © 2026 Ayesha

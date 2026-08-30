@@ -1,14 +1,27 @@
 package com.ayesha.resolvehub.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 
+@Schema(description = "Representation of an audit activity event on a ticket")
 public class TicketActivityResponse {
 
+    @Schema(description = "Unique activity log ID", example = "1")
     private Long id;
+
+    @Schema(description = "Action category: CREATED, STATUS_CHANGED, ASSIGNED, PRIORITY_CHANGED", example = "STATUS_CHANGED")
     private String action;
+
+    @Schema(description = "Human-readable description of what occurred", example = "Status changed from OPEN to IN_PROGRESS")
     private String description;
+
+    @Schema(description = "Previous field value prior to mutation", example = "OPEN")
     private String oldValue;
+
+    @Schema(description = "New field value after mutation", example = "IN_PROGRESS")
     private String newValue;
+
+    @Schema(description = "Timestamp when the event occurred", example = "2026-08-30T11:10:00")
     private LocalDateTime createdAt;
 
     public TicketActivityResponse() {
