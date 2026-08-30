@@ -1,16 +1,19 @@
 package com.ayesha.resolvehub.service;
 
 import com.ayesha.resolvehub.dto.CreateTicketRequest;
+import com.ayesha.resolvehub.dto.TicketActivityResponse;
 import com.ayesha.resolvehub.dto.TicketResponse;
 import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.entity.Project;
 import com.ayesha.resolvehub.entity.Ticket;
+import com.ayesha.resolvehub.entity.TicketActivity;
 import com.ayesha.resolvehub.entity.User;
 import com.ayesha.resolvehub.exception.InvalidTicketStatusTransitionException;
 import com.ayesha.resolvehub.exception.ProjectNotFoundException;
 import com.ayesha.resolvehub.exception.TicketNotFoundException;
 import com.ayesha.resolvehub.exception.UserNotFoundException;
 import com.ayesha.resolvehub.repository.ProjectRepository;
+import com.ayesha.resolvehub.repository.TicketActivityRepository;
 import com.ayesha.resolvehub.repository.TicketRepository;
 import com.ayesha.resolvehub.repository.UserRepository;
 import com.ayesha.resolvehub.repository.projection.TicketSummary;
@@ -31,15 +34,18 @@ public class TicketService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final TicketRepository ticketRepository;
+    private final TicketActivityRepository ticketActivityRepository;
     private final EntityManager entityManager;
 
     public TicketService(
         TicketRepository ticketRepository,
+        TicketActivityRepository ticketActivityRepository,
         EntityManager entityManager,
         ProjectRepository projectRepository,
         UserRepository userRepository
     ) {
         this.ticketRepository = ticketRepository;
+        this.ticketActivityRepository = ticketActivityRepository;
         this.entityManager = entityManager;
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
@@ -62,6 +68,7 @@ public class TicketService {
             .orElseThrow(() -> new TicketNotFoundException(id));
     }
 
+    @Transactional
     public TicketResponse createTicket(CreateTicketRequest request) {
         Project project = projectRepository
             .findById(request.getProjectId())
@@ -87,15 +94,31 @@ public class TicketService {
 
         Ticket savedTicket = ticketRepository.save(ticket);
 
+        recordActivity(savedTicket, "CREATED", "Ticket created", null, null);
+
         return toResponse(savedTicket);
     }
 
+    @Transactional
     public Ticket updateTicket(Long id, UpdateTicketRequest request) {
         Ticket ticket = getTicketEntityById(id);
 
+        String oldPriority = ticket.getPriority();
+        String newPriority = request.getPriority();
+
         ticket.setTitle(request.getTitle());
         ticket.setDescription(request.getDescription());
-        ticket.setPriority(request.getPriority());
+        ticket.setPriority(newPriority);
+
+        if (newPriority != null && !newPriority.equalsIgnoreCase(oldPriority)) {
+            recordActivity(
+                ticket,
+                "PRIORITY_CHANGED",
+                "Ticket priority changed",
+                oldPriority,
+                newPriority
+            );
+        }
 
         return ticketRepository.save(ticket);
     }
@@ -107,7 +130,16 @@ public class TicketService {
             .findById(assigneeId)
             .orElseThrow(() -> new UserNotFoundException(assigneeId));
 
-        ticket.setAssignee(assignee);
+        User oldAssignee = ticket.getAssignee();
+        Long oldAssigneeId = oldAssignee != null ? oldAssignee.getId() : null;
+
+        if (oldAssigneeId == null || !oldAssigneeId.equals(assignee.getId())) {
+            String oldVal = oldAssignee != null ? oldAssignee.getName() : null;
+            String newVal = assignee.getName();
+
+            ticket.setAssignee(assignee);
+            recordActivity(ticket, "ASSIGNED", "Ticket assigned", oldVal, newVal);
+        }
 
         return toResponse(ticket);
     }
@@ -118,7 +150,17 @@ public class TicketService {
         String targetStatus = status.toUpperCase().trim();
         validateStatusTransition(ticket.getStatus(), targetStatus);
 
-        ticket.setStatus(targetStatus);
+        String oldStatus = ticket.getStatus();
+        if (!targetStatus.equalsIgnoreCase(oldStatus)) {
+            ticket.setStatus(targetStatus);
+            recordActivity(
+                ticket,
+                "STATUS_CHANGED",
+                "Ticket status changed",
+                oldStatus,
+                targetStatus
+            );
+        }
 
         return toResponse(ticket);
     }
@@ -132,10 +174,65 @@ public class TicketService {
 
         validateStatusTransition(ticket.getStatus(), "IN_PROGRESS");
 
-        ticket.setAssignee(assignee);
-        ticket.setStatus("IN_PROGRESS");
+        User oldAssignee = ticket.getAssignee();
+        Long oldAssigneeId = oldAssignee != null ? oldAssignee.getId() : null;
+        if (oldAssigneeId == null || !oldAssigneeId.equals(assignee.getId())) {
+            String oldVal = oldAssignee != null ? oldAssignee.getName() : null;
+            ticket.setAssignee(assignee);
+            recordActivity(ticket, "ASSIGNED", "Ticket assigned", oldVal, assignee.getName());
+        }
+
+        String oldStatus = ticket.getStatus();
+        if (!"IN_PROGRESS".equalsIgnoreCase(oldStatus)) {
+            ticket.setStatus("IN_PROGRESS");
+            recordActivity(
+                ticket,
+                "STATUS_CHANGED",
+                "Ticket status changed",
+                oldStatus,
+                "IN_PROGRESS"
+            );
+        }
 
         return toResponse(ticket);
+    }
+
+    private void recordActivity(
+        Ticket ticket,
+        String action,
+        String description,
+        String oldValue,
+        String newValue
+    ) {
+        TicketActivity activity = new TicketActivity(
+            ticket,
+            action,
+            description,
+            oldValue,
+            newValue
+        );
+        ticketActivityRepository.save(activity);
+    }
+
+    public List<TicketActivityResponse> getTicketActivities(Long ticketId) {
+        getTicketEntityById(ticketId);
+
+        return ticketActivityRepository
+            .findByTicketIdOrderByCreatedAtDesc(ticketId)
+            .stream()
+            .map(this::toActivityResponse)
+            .toList();
+    }
+
+    private TicketActivityResponse toActivityResponse(TicketActivity activity) {
+        return new TicketActivityResponse(
+            activity.getId(),
+            activity.getAction(),
+            activity.getDescription(),
+            activity.getOldValue(),
+            activity.getNewValue(),
+            activity.getCreatedAt()
+        );
     }
 
     private void validateStatusTransition(String currentStatus, String targetStatus) {

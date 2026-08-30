@@ -2,6 +2,7 @@ package com.ayesha.resolvehub.controller;
 
 import com.ayesha.resolvehub.dto.AssignTicketRequest;
 import com.ayesha.resolvehub.dto.CreateTicketRequest;
+import com.ayesha.resolvehub.dto.TicketActivityResponse;
 import com.ayesha.resolvehub.dto.TicketResponse;
 import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.dto.UpdateTicketStatusRequest;
@@ -70,6 +71,11 @@ public class TicketController {
         @Valid @RequestBody AssignTicketRequest request
     ) {
         return ticketService.assignTicketAndStart(id, request.getAssigneeId());
+    }
+
+    @GetMapping("/{id}/activities")
+    public List<TicketActivityResponse> getTicketActivities(@PathVariable Long id) {
+        return ticketService.getTicketActivities(id);
     }
 
     @DeleteMapping("/{id}")

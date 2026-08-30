@@ -44,6 +44,13 @@ public class Ticket {
     )
     private List<Comment> comments = new ArrayList<>();
 
+    @OneToMany(
+        mappedBy = "ticket",
+        cascade = CascadeType.ALL,
+        fetch = FetchType.LAZY
+    )
+    private List<TicketActivity> activities = new ArrayList<>();
+
     public Ticket() {}
 
     public Ticket(
@@ -157,6 +164,14 @@ public class Ticket {
 
     public void setComments(List<Comment> comments) {
         this.comments = comments;
+    }
+
+    public List<TicketActivity> getActivities() {
+        return activities;
+    }
+
+    public void setActivities(List<TicketActivity> activities) {
+        this.activities = activities;
     }
 }
 
