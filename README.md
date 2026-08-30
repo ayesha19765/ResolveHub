@@ -3,18 +3,23 @@
 [![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-brightgreen)](https://spring.io/projects/spring-boot)
 [![Spring Security](https://img.shields.io/badge/Spring%20Security-6.x-green)](https://spring.io/projects/spring-security)
+[![React](https://img.shields.io/badge/React-18-blue)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6.0-purple)](https://vitejs.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Multi--stage-blue)](https://www.docker.com/)
 [![Database](https://img.shields.io/badge/Database-PostgreSQL%2017-blue)](https://www.postgresql.org/)
 [![Documentation](https://img.shields.io/badge/API%20Docs-OpenAPI%20%2F%20Swagger-green)](http://localhost:8081/swagger-ui.html)
 [![Tests](https://img.shields.io/badge/Tests-57%20Passed-success)](src/test/java)
 
-**ResolveHub** is an enterprise-grade issue-tracking and resolution platform built with **Java 21, Spring Boot, Spring Security, Spring MVC, Spring Data JPA, Hibernate, PostgreSQL, and Docker Compose**.
+**ResolveHub** is an enterprise-grade issue-tracking and resolution platform built with **Java 21, Spring Boot, Spring Security, Spring MVC, Spring Data JPA, Hibernate, PostgreSQL, Docker Compose, and a React + TypeScript frontend**.
 
 The system models a real-world ticket management workflow where users authenticate via **HTTP Basic Auth**, are authorized using strict **Role-Based Access Control (RBAC)** (`REPORTER`, `AGENT`, `ADMIN`), and can create, assign, update, filter, comment on, and audit issues across projects with transaction-safe state machines and centralized error handling.
 
 ---
 
 ## Table of Contents
+- [Full-Stack Architecture](#full-stack-architecture)
+- [Frontend (React + TypeScript + Vite)](#frontend-react--typescript--vite)
 - [Quickstart with Docker Compose](#quickstart-with-docker-compose)
 - [Docker Architecture & Networking](#docker-architecture--networking)
 - [Features](#features)
@@ -30,6 +35,81 @@ The system models a real-world ticket management workflow where users authentica
 - [Automated Testing](#automated-testing)
 - [Docker Commands Cheat Sheet](#docker-commands-cheat-sheet)
 - [Project Structure](#project-structure)
+
+---
+
+## Full-Stack Architecture
+
+```mermaid
+flowchart TD
+    subgraph ClientLayer["Frontend Client (Port 5173)"]
+        Browser["React 18 SPA (TypeScript + Vite)"]
+        AuthContext["AuthContext (HTTP Basic)"]
+        APIClient["Centralized API Client (Fetch + DTOs)"]
+    end
+
+    subgraph SecurityLayer["Spring Security 6 (Port 8081)"]
+        FilterChain["SecurityFilterChain (Stateless / Basic Auth)"]
+        RBAC["Role-Based Authorization (REPORTER / AGENT / ADMIN)"]
+    end
+
+    subgraph WebLayer["Spring MVC Web Layer"]
+        Controller["TicketController (@RestController)"]
+        GlobalException["GlobalExceptionHandler (@RestControllerAdvice)"]
+    end
+
+    subgraph ServiceLayer["Business & Persistence Layer"]
+        Service["TicketService (@Transactional)"]
+        Specs["TicketSpecification (CriteriaBuilder Filters)"]
+        Repo["TicketRepository (@EntityGraph, Projections)"]
+    end
+
+    subgraph DatabaseLayer["Relational Database Storage"]
+        Hibernate["Hibernate 6 ORM (Dirty Checking, Indexes)"]
+        PostgreSQL[("PostgreSQL 17 Database")]
+    end
+
+    Browser --> AuthContext
+    AuthContext --> APIClient
+    APIClient -->|HTTP JSON Requests| FilterChain
+    FilterChain --> RBAC
+    RBAC --> Controller
+    Controller --> GlobalException
+    Controller --> Service
+    Service --> Specs
+    Service --> Repo
+    Repo --> Hibernate
+    Hibernate --> PostgreSQL
+```
+
+---
+
+## Frontend (React + TypeScript + Vite)
+
+The frontend is a portfolio presentation layer designed to showcase the Spring Boot backend with a real issue-tracking UI.
+
+### Key Capabilities
+- **Role-Aware UI**: Automatically adapts UI controls according to user role (`REPORTER` can only view and create; `AGENT` can assign and transition status; `ADMIN` can delete tickets).
+- **Dynamic Search Toolbar**: Uses backend JPA Specifications to filter by keyword, status, priority, project, assignee, and dates.
+- **Server-Side Pagination & Sorting**: Leverages Spring Data's `Page<T>` with page size and whitelist sorting controls.
+- **Ticket Workflow State Machine**: Step-by-step status transitions (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`).
+- **Discussion Comments**: Paginated comments thread with author attribution.
+- **Audit Activity Timeline**: Chronological history trail tracking all ticket modifications.
+
+### Running the Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open [`http://localhost:5173`](http://localhost:5173) in your browser.
+
+#### Demo Credentials:
+| Role | Email | Password | Allowed Operations |
+|---|---|---|---|
+| **Admin** | `admin@resolvehub.com` | `admin123` | Full access (Delete, Status, Assign, Edit, Create) |
+| **Agent** | `agent@resolvehub.com` | `agent123` | Support Agent (Status transitions, Assignment, Edit, Create) |
+| **Reporter** | `reporter@resolvehub.com` | `reporter123` | Reporter (Browse, Search, Create Tickets, Post Comments) |
 
 ---
 
@@ -62,10 +142,7 @@ Open your browser and navigate to:
 - **Swagger UI**: [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html)
 - **OpenAPI 3.0 Spec**: [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs)
 
-Click the **Authorize** button and log in with default development credentials:
-- **Admin**: `admin@resolvehub.com` / `admin123`
-- **Support Agent**: `agent@resolvehub.com` / `agent123`
-- **Reporter**: `reporter@resolvehub.com` / `reporter123`
+Click the **Authorize** button and log in with default development credentials.
 
 ### 5. Stop Containers
 ```bash
@@ -82,6 +159,7 @@ flowchart TD
 
     subgraph Host["Host Machine"]
         Client["Browser / REST Client"]
+        FrontendDev["React Frontend (localhost:5173)"]
         Swagger["Swagger UI (localhost:8081)"]
     end
 
@@ -100,6 +178,7 @@ flowchart TD
         Volume[("postgres_data\n(/var/lib/postgresql/data)")]
     end
 
+    FrontendDev -->|http://localhost:8081| App
     Client -->|http://localhost:8081| App
     Swagger -->|http://localhost:8081| App
     App -->|"jdbc:postgresql://postgres:5432/resolvehub"| DB
@@ -107,16 +186,11 @@ flowchart TD
     Health -.->|"service_healthy check"| App
 ```
 
-### Key Architectural Concepts:
-1. **Container $\neq$ Virtual Machine**: A container shares the host OS kernel and isolates processes, memory, and filesystem without hypervisor overhead.
-2. **Docker Image $\rightarrow$ Container**: An image is a read-only template; a container is an active running instance of that image.
-3. **Internal Hostname Resolution**: Inside the Docker Compose network, services communicate using service names (`postgres:5432`) as DNS hostnames rather than `localhost:5432`.
-4. **Volume Persistence**: PostgreSQL data is stored in the named Docker volume `postgres_data`, ensuring database rows persist across container restarts (`docker compose down`).
-
 ---
 
 ## Features
 
+- **React + TypeScript SPA**: Clean dashboard with role-aware UI controls, dynamic filtering, server pagination, comments, and audit timeline.
 - **Containerized Deployment**: Multi-stage Dockerfile using Eclipse Temurin Java 21 with a lightweight non-root runtime container.
 - **Docker Compose Orchestration**: Automated PostgreSQL provisioning, health checks (`pg_isready`), and dependency sequencing (`condition: service_healthy`).
 - **Role-Based Access Control (RBAC)**: Spring Security integration with `REPORTER`, `AGENT`, and `ADMIN` roles.
@@ -126,35 +200,11 @@ flowchart TD
 - **Transactional State Transitions**: Enforces valid ticket status transitions (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`).
 - **Dynamic Filtering with JPA Specifications**: Composable multi-criteria search without combinatorial repository methods.
 - **Database Pagination & Whitelist Sorting**: Database-level `LIMIT`/`OFFSET` queries with sort field whitelisting to protect against injection.
+- **Database Indexes**: Optimized indexes on status, priority, project_id, assignee_id, reporter_id, and created_at.
 - **Automated Audit Logging**: Append-only activity history tracking ticket creation, status changes, assignments, and priority updates.
 - **Paginated Discussions**: Ticket comments with author metadata and N+1 query prevention using `@EntityGraph`.
 - **Centralized Exception Handling**: Uniform REST error responses via `@RestControllerAdvice` and `ApiErrorResponse` DTOs.
 - **Comprehensive Automated Test Suite**: 57 automated tests covering Security, Unit, MockMvc, JPA Data, and Integration workflows.
-
----
-
-## Security & Authentication Model
-
-### Core Concepts: Authentication vs Authorization
-- **Authentication ("Who are you?")**: Identifies the calling principal using their email and BCrypt-verified password credentials via HTTP Basic header.
-- **Authorization ("What are you allowed to do?")**: Determines whether the authenticated principal possesses the required `Role` (`ROLE_REPORTER`, `ROLE_AGENT`, `ROLE_ADMIN`) to access the requested URI and HTTP method.
-
-### Role Hierarchy & Permissions
-| Role | Permitted Operations |
-|---|---|
-| **`PUBLIC`** | OpenAPI specifications (`/v3/api-docs/**`) and Swagger UI (`/swagger-ui/**`, `/swagger-ui.html`) |
-| **`REPORTER`** | View tickets & search, view ticket activities, post tickets, post comments |
-| **`AGENT`** | All `REPORTER` capabilities + assign tickets, update ticket status, update ticket details |
-| **`ADMIN`** | Complete system access including deleting tickets, project management, and user administration |
-
-### Default Development Credentials
-When running locally with the default/dev profile, ResolveHub initializes the following seed accounts:
-
-| Email | Password | Role |
-|---|---|---|
-| `admin@resolvehub.com` | `admin123` | `ADMIN` |
-| `agent@resolvehub.com` | `agent123` | `AGENT` |
-| `reporter@resolvehub.com` | `reporter123` | `REPORTER` |
 
 ---
 
@@ -213,25 +263,9 @@ All API errors are intercepted by `GlobalExceptionHandler` (`@RestControllerAdvi
 
 ---
 
-## Environment Configuration & Profiles
-
-ResolveHub separates base configuration from environment-specific profiles. Hardcoded secrets are never stored in source control.
-
-### Environment Variables
-| Variable | Default Value | Description |
-|---|---|---|
-| `DB_URL` | `jdbc:postgresql://postgres:5432/resolvehub` | PostgreSQL JDBC connection URL |
-| `DB_USERNAME` | `postgres` | Database username |
-| `DB_PASSWORD` | `password` | Database password |
-| `HIBERNATE_DDL_AUTO` | `update` | Hibernate schema mode (`update`, `validate`, `none`) |
-| `SHOW_SQL` | `false` | Enable SQL query printing |
-| `SPRING_PROFILES_ACTIVE` | `dev` | Active profile (`dev`, `prod`, `test`) |
-
----
-
 ## Automated Testing
 
-ResolveHub includes 57 automated tests with 100% pass rate:
+ResolveHub includes 57 automated backend tests with 100% pass rate:
 
 ```bash
 mvn clean test
@@ -262,39 +296,47 @@ mvn clean test
 ## Project Structure
 
 ```text
-src/
-├── main/
-│   ├── java/com/ayesha/resolvehub/
-│   │   ├── config/             # SecurityConfig, OpenApiConfig, SecurityDataInitializer
-│   │   ├── controller/         # REST API endpoints & Swagger annotations
-│   │   ├── dto/                # Request & Response DTOs with @Schema
-│   │   ├── entity/             # JPA Entities (User, Role, Ticket, Project, Activity, Comment)
-│   │   ├── exception/          # Domain exceptions & GlobalExceptionHandler
-│   │   ├── repository/         # Spring Data repositories & JPA Specifications
-│   │   │   ├── projection/     # Interface-based projections (TicketSummary)
-│   │   │   └── specification/  # Composable Specifications (TicketSpecification)
-│   │   ├── security/           # CustomUserDetailsService
-│   │   └── service/            # Transactional business logic
-│   └── resources/
-│       ├── application.properties
-│       ├── application-dev.properties
-│       └── application-prod.properties
-└── test/
-    ├── java/com/ayesha/resolvehub/
-    │   ├── controller/         # TicketControllerTest (MockMvc + @WithMockUser)
-    │   ├── integration/        # SecurityIntegrationTest, TicketWorkflowIntegrationTest
-    │   ├── repository/         # TicketRepositoryTest (DataJpaTest)
-    │   └── service/            # TicketServiceTest (Mockito)
-    └── resources/
-        └── application.properties # Isolated H2 test config
-├── .dockerignore               # Docker build context exclusion rules
-├── .env.example                # Example environment configuration
-├── Dockerfile                  # Multi-stage Java 21 build & runtime
-├── docker-compose.yml          # PostgreSQL & App orchestration with healthcheck
-└── pom.xml                     # Maven project definition
+ResolveHub/
+├── frontend/                   # React + TypeScript + Vite SPA
+│   ├── src/
+│   │   ├── api/                # Typed REST API client layer (Fetch + Basic Auth)
+│   │   ├── components/         # Layout, Navbar, Sidebar, Badges, Pagination, Modal
+│   │   ├── context/            # AuthContext (Role management & session)
+│   │   ├── pages/              # Login, Dashboard, TicketList, TicketDetail, CreateTicket
+│   │   ├── types/              # TypeScript models mirroring backend DTOs
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+├── docs/
+│   └── PROJECT_SUMMARY.md      # Technical revision guide (WHAT / WHY / HOW for 25 topics)
+├── src/
+│   ├── main/
+│   │   ├── java/com/ayesha/resolvehub/
+│   │   │   ├── config/         # SecurityConfig (CORS, RBAC), OpenApiConfig, SecurityDataInitializer
+│   │   │   ├── controller/     # REST API endpoints & Swagger annotations
+│   │   │   ├── dto/            # Request & Response DTOs with @Schema
+│   │   │   ├── entity/         # JPA Entities (User, Role, Ticket, Project, Activity, Comment)
+│   │   │   ├── exception/      # Domain exceptions & GlobalExceptionHandler
+│   │   │   ├── repository/     # Spring Data repositories & JPA Specifications
+│   │   │   ├── security/       # CustomUserDetailsService
+│   │   │   └── service/        # Transactional business logic & state transitions
+│   │   └── resources/
+│   └── test/
+│       ├── java/com/ayesha/resolvehub/
+│       │   ├── controller/     # TicketControllerTest (MockMvc + @WithMockUser)
+│       │   ├── integration/    # SecurityIntegrationTest, TicketWorkflowIntegrationTest
+│       │   ├── repository/     # TicketRepositoryTest (DataJpaTest)
+│       │   └── service/        # TicketServiceTest (Mockito)
+├── .dockerignore
+├── .env.example
+├── Dockerfile
+├── docker-compose.yml
+└── pom.xml
 ```
 
 ---
 
-**ResolveHub** · Java 21 · Spring Boot 3.5.5 · Spring Security 6 · PostgreSQL 17 · Docker Compose · OpenAPI 3.0  
+**ResolveHub** · Java 21 · Spring Boot 3.5.5 · Spring Security 6 · React 18 · TypeScript · PostgreSQL 17 · Docker Compose  
 © 2026 Ayesha
