@@ -1,6 +1,8 @@
 package com.ayesha.resolvehub.controller;
 
 import com.ayesha.resolvehub.dto.AssignTicketRequest;
+import com.ayesha.resolvehub.dto.CommentResponse;
+import com.ayesha.resolvehub.dto.CreateCommentRequest;
 import com.ayesha.resolvehub.dto.CreateTicketRequest;
 import com.ayesha.resolvehub.dto.TicketActivityResponse;
 import com.ayesha.resolvehub.dto.TicketResponse;
@@ -76,6 +78,23 @@ public class TicketController {
     @GetMapping("/{id}/activities")
     public List<TicketActivityResponse> getTicketActivities(@PathVariable Long id) {
         return ticketService.getTicketActivities(id);
+    }
+
+    @PostMapping("/{id}/comments")
+    public CommentResponse createComment(
+        @PathVariable Long id,
+        @Valid @RequestBody CreateCommentRequest request
+    ) {
+        return ticketService.createComment(id, request);
+    }
+
+    @GetMapping("/{id}/comments")
+    public Page<CommentResponse> getComments(
+        @PathVariable Long id,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size
+    ) {
+        return ticketService.getComments(id, page, size);
     }
 
     @DeleteMapping("/{id}")

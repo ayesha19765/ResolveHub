@@ -39,10 +39,9 @@ public class Ticket {
     @OneToMany(
         mappedBy = "ticket",
         cascade = CascadeType.ALL,
-        orphanRemoval = true,
         fetch = FetchType.LAZY
     )
-    private List<Comment> comments = new ArrayList<>();
+    private List<TicketComment> comments = new ArrayList<>();
 
     @OneToMany(
         mappedBy = "ticket",
@@ -158,11 +157,11 @@ public class Ticket {
         this.assignee = assignee;
     }
 
-    public List<Comment> getComments() {
+    public List<TicketComment> getComments() {
         return comments;
     }
 
-    public void setComments(List<Comment> comments) {
+    public void setComments(List<TicketComment> comments) {
         this.comments = comments;
     }
 

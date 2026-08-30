@@ -1,5 +1,7 @@
 package com.ayesha.resolvehub.service;
 
+import com.ayesha.resolvehub.dto.CommentResponse;
+import com.ayesha.resolvehub.dto.CreateCommentRequest;
 import com.ayesha.resolvehub.dto.CreateTicketRequest;
 import com.ayesha.resolvehub.dto.TicketActivityResponse;
 import com.ayesha.resolvehub.dto.TicketResponse;
@@ -7,6 +9,7 @@ import com.ayesha.resolvehub.dto.UpdateTicketRequest;
 import com.ayesha.resolvehub.entity.Project;
 import com.ayesha.resolvehub.entity.Ticket;
 import com.ayesha.resolvehub.entity.TicketActivity;
+import com.ayesha.resolvehub.entity.TicketComment;
 import com.ayesha.resolvehub.entity.User;
 import com.ayesha.resolvehub.exception.InvalidTicketStatusTransitionException;
 import com.ayesha.resolvehub.exception.ProjectNotFoundException;
@@ -14,6 +17,7 @@ import com.ayesha.resolvehub.exception.TicketNotFoundException;
 import com.ayesha.resolvehub.exception.UserNotFoundException;
 import com.ayesha.resolvehub.repository.ProjectRepository;
 import com.ayesha.resolvehub.repository.TicketActivityRepository;
+import com.ayesha.resolvehub.repository.TicketCommentRepository;
 import com.ayesha.resolvehub.repository.TicketRepository;
 import com.ayesha.resolvehub.repository.UserRepository;
 import com.ayesha.resolvehub.repository.projection.TicketSummary;
@@ -35,17 +39,20 @@ public class TicketService {
     private final UserRepository userRepository;
     private final TicketRepository ticketRepository;
     private final TicketActivityRepository ticketActivityRepository;
+    private final TicketCommentRepository ticketCommentRepository;
     private final EntityManager entityManager;
 
     public TicketService(
         TicketRepository ticketRepository,
         TicketActivityRepository ticketActivityRepository,
+        TicketCommentRepository ticketCommentRepository,
         EntityManager entityManager,
         ProjectRepository projectRepository,
         UserRepository userRepository
     ) {
         this.ticketRepository = ticketRepository;
         this.ticketActivityRepository = ticketActivityRepository;
+        this.ticketCommentRepository = ticketCommentRepository;
         this.entityManager = entityManager;
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
@@ -350,5 +357,51 @@ public class TicketService {
         );
 
         return ticketRepository.findAll(specification, pageable);
+    }
+
+    @Transactional
+    public CommentResponse createComment(Long ticketId, CreateCommentRequest request) {
+        Ticket ticket = getTicketEntityById(ticketId);
+
+        User author = userRepository
+            .findById(request.getAuthorId())
+            .orElseThrow(() ->
+                new UserNotFoundException(request.getAuthorId())
+            );
+
+        TicketComment comment = new TicketComment(
+            ticket,
+            author,
+            request.getContent()
+        );
+
+        TicketComment savedComment = ticketCommentRepository.save(comment);
+
+        return toCommentResponse(savedComment);
+    }
+
+    public Page<CommentResponse> getComments(Long ticketId, int page, int size) {
+        getTicketEntityById(ticketId);
+
+        Pageable pageable = PageRequest.of(
+            page,
+            size,
+            Sort.by("createdAt").descending()
+        );
+
+        return ticketCommentRepository
+            .findByTicketId(ticketId, pageable)
+            .map(this::toCommentResponse);
+    }
+
+    private CommentResponse toCommentResponse(TicketComment comment) {
+        return new CommentResponse(
+            comment.getId(),
+            comment.getAuthor() != null ? comment.getAuthor().getId() : null,
+            comment.getAuthor() != null ? comment.getAuthor().getName() : null,
+            comment.getContent(),
+            comment.getCreatedAt(),
+            comment.getUpdatedAt()
+        );
     }
 }
