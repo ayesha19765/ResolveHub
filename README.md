@@ -3,19 +3,20 @@
 [![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-brightgreen)](https://spring.io/projects/spring-boot)
 [![Spring Security](https://img.shields.io/badge/Spring%20Security-6.x-green)](https://spring.io/projects/spring-security)
-[![Build](https://img.shields.io/badge/Build-Maven-blue)](https://maven.apache.org/)
-[![Database](https://img.shields.io/badge/Database-PostgreSQL-blue)](https://www.postgresql.org/)
-[![ORM](https://img.shields.io/badge/ORM-Hibernate-brown)](https://hibernate.org/)
+[![Docker](https://img.shields.io/badge/Docker-Multi--stage-blue)](https://www.docker.com/)
+[![Database](https://img.shields.io/badge/Database-PostgreSQL%2017-blue)](https://www.postgresql.org/)
 [![Documentation](https://img.shields.io/badge/API%20Docs-OpenAPI%20%2F%20Swagger-green)](http://localhost:8081/swagger-ui.html)
 [![Tests](https://img.shields.io/badge/Tests-57%20Passed-success)](src/test/java)
 
-**ResolveHub** is an enterprise-grade issue-tracking and resolution platform built with **Java 21, Spring Boot, Spring Security, Spring MVC, Spring Data JPA, Hibernate, and PostgreSQL**.
+**ResolveHub** is an enterprise-grade issue-tracking and resolution platform built with **Java 21, Spring Boot, Spring Security, Spring MVC, Spring Data JPA, Hibernate, PostgreSQL, and Docker Compose**.
 
 The system models a real-world ticket management workflow where users authenticate via **HTTP Basic Auth**, are authorized using strict **Role-Based Access Control (RBAC)** (`REPORTER`, `AGENT`, `ADMIN`), and can create, assign, update, filter, comment on, and audit issues across projects with transaction-safe state machines and centralized error handling.
 
 ---
 
 ## Table of Contents
+- [Quickstart with Docker Compose](#quickstart-with-docker-compose)
+- [Docker Architecture & Networking](#docker-architecture--networking)
 - [Features](#features)
 - [Architecture & Security Flow](#architecture--security-flow)
 - [Security & Authentication Model](#security--authentication-model)
@@ -27,56 +28,108 @@ The system models a real-world ticket management workflow where users authentica
 - [Global Exception Handling](#global-exception-handling)
 - [Environment Configuration & Profiles](#environment-configuration--profiles)
 - [Automated Testing](#automated-testing)
-- [Getting Started](#getting-started)
+- [Docker Commands Cheat Sheet](#docker-commands-cheat-sheet)
 - [Project Structure](#project-structure)
+
+---
+
+## Quickstart with Docker Compose
+
+Running ResolveHub with a production-grade PostgreSQL database requires only Docker and Docker Compose.
+
+### 1. Clone & Configure Environment
+```bash
+git clone https://github.com/ayesha/ResolveHub.git
+cd ResolveHub
+
+# Optional: customize local environment settings
+cp .env.example .env
+```
+
+### 2. Build and Start Services
+```bash
+docker compose up --build -d
+```
+
+### 3. Verify Container Status
+```bash
+docker compose ps
+```
+You should see `resolvehub-postgres` marked as `healthy` and `resolvehub-app` running on port `8081`.
+
+### 4. Explore Interactive API Documentation
+Open your browser and navigate to:
+- **Swagger UI**: [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html)
+- **OpenAPI 3.0 Spec**: [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs)
+
+Click the **Authorize** button and log in with default development credentials:
+- **Admin**: `admin@resolvehub.com` / `admin123`
+- **Support Agent**: `agent@resolvehub.com` / `agent123`
+- **Reporter**: `reporter@resolvehub.com` / `reporter123`
+
+### 5. Stop Containers
+```bash
+# Stop containers while preserving database volume
+docker compose down
+```
+
+---
+
+## Docker Architecture & Networking
+
+```mermaid
+flowchart TD
+
+    subgraph Host["Host Machine"]
+        Client["Browser / REST Client"]
+        Swagger["Swagger UI (localhost:8081)"]
+    end
+
+    subgraph DockerNetwork["Docker Bridge Network (resolvehub_default)"]
+        subgraph AppContainer["resolvehub-app (Container)"]
+            App["ResolveHub Spring Boot App\n(Port 8081)"]
+        end
+
+        subgraph PostgresContainer["resolvehub-postgres (Container)"]
+            DB[("PostgreSQL 17\n(Port 5432)")]
+            Health["Healthcheck: pg_isready"]
+        end
+    end
+
+    subgraph PersistentStorage["Docker Named Volume"]
+        Volume[("postgres_data\n(/var/lib/postgresql/data)")]
+    end
+
+    Client -->|http://localhost:8081| App
+    Swagger -->|http://localhost:8081| App
+    App -->|"jdbc:postgresql://postgres:5432/resolvehub"| DB
+    DB <--> Volume
+    Health -.->|"service_healthy check"| App
+```
+
+### Key Architectural Concepts:
+1. **Container $\neq$ Virtual Machine**: A container shares the host OS kernel and isolates processes, memory, and filesystem without hypervisor overhead.
+2. **Docker Image $\rightarrow$ Container**: An image is a read-only template; a container is an active running instance of that image.
+3. **Internal Hostname Resolution**: Inside the Docker Compose network, services communicate using service names (`postgres:5432`) as DNS hostnames rather than `localhost:5432`.
+4. **Volume Persistence**: PostgreSQL data is stored in the named Docker volume `postgres_data`, ensuring database rows persist across container restarts (`docker compose down`).
 
 ---
 
 ## Features
 
-- **Role-Based Security**: Spring Security integration with `REPORTER`, `AGENT`, and `ADMIN` roles.
+- **Containerized Deployment**: Multi-stage Dockerfile using Eclipse Temurin Java 21 with a lightweight non-root runtime container.
+- **Docker Compose Orchestration**: Automated PostgreSQL provisioning, health checks (`pg_isready`), and dependency sequencing (`condition: service_healthy`).
+- **Role-Based Access Control (RBAC)**: Spring Security integration with `REPORTER`, `AGENT`, and `ADMIN` roles.
 - **BCrypt Password Hashing**: Passwords hashed with salted BCrypt before persistence and strictly protected from JSON serialization and logs.
 - **Stateless REST Security**: HTTP Basic authentication over stateless sessions with explicit CSRF disabling justification.
 - **Interactive OpenAPI Documentation**: Embedded Swagger UI 3.0 specification with `basicAuth` authentication support.
-- **Layered Architecture**: Strict separation across Controller, DTO, Service, Repository, and Security layers.
 - **Transactional State Transitions**: Enforces valid ticket status transitions (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`).
 - **Dynamic Filtering with JPA Specifications**: Composable multi-criteria search without combinatorial repository methods.
 - **Database Pagination & Whitelist Sorting**: Database-level `LIMIT`/`OFFSET` queries with sort field whitelisting to protect against injection.
 - **Automated Audit Logging**: Append-only activity history tracking ticket creation, status changes, assignments, and priority updates.
 - **Paginated Discussions**: Ticket comments with author metadata and N+1 query prevention using `@EntityGraph`.
 - **Centralized Exception Handling**: Uniform REST error responses via `@RestControllerAdvice` and `ApiErrorResponse` DTOs.
-- **Environment-Aware Configuration**: Profile-driven configuration (`dev`, `prod`, `test`) without hardcoded secrets.
 - **Comprehensive Automated Test Suite**: 57 automated tests covering Security, Unit, MockMvc, JPA Data, and Integration workflows.
-
----
-
-## Architecture & Security Flow
-
-```mermaid
-flowchart TD
-
-    Client["Client / Swagger UI"] -->|"HTTP Request (Basic Auth Header)"| FilterChain["SecurityFilterChain"]
-
-    FilterChain -->|"Extract Credentials"| AuthFilter["BasicAuthenticationFilter"]
-
-    AuthFilter --> UserDetailsService["CustomUserDetailsService"]
-
-    UserDetailsService -->|"findByEmail"| UserRepository["UserRepository / DB"]
-
-    UserRepository -->|"Hashed Password"| PasswordEncoder["BCryptPasswordEncoder"]
-
-    PasswordEncoder -->|"Validate & Create"| Principal["Authenticated Principal (Roles: REPORTER/AGENT/ADMIN)"]
-
-    Principal -->|"Role & Method Rules"| Controller["TicketController (@PreAuthorize)"]
-
-    Controller --> Service["TicketService (@Transactional)"]
-
-    Service --> Repository["TicketRepository / JPA"]
-
-    Repository --> Hibernate["Hibernate ORM"]
-
-    Hibernate --> DB["PostgreSQL / H2"]
-```
 
 ---
 
@@ -94,10 +147,6 @@ flowchart TD
 | **`AGENT`** | All `REPORTER` capabilities + assign tickets, update ticket status, update ticket details |
 | **`ADMIN`** | Complete system access including deleting tickets, project management, and user administration |
 
-### 401 Unauthorized vs 403 Forbidden
-- **`401 Unauthorized`**: Returned when credentials are missing, malformed, or invalid (e.g. bad password or non-existent email).
-- **`403 Forbidden`**: Returned when the user is authenticated, but their assigned role does not grant sufficient permission for the requested action (e.g. a `REPORTER` attempting to delete a ticket or change status).
-
 ### Default Development Credentials
 When running locally with the default/dev profile, ResolveHub initializes the following seed accounts:
 
@@ -106,21 +155,6 @@ When running locally with the default/dev profile, ResolveHub initializes the fo
 | `admin@resolvehub.com` | `admin123` | `ADMIN` |
 | `agent@resolvehub.com` | `agent123` | `AGENT` |
 | `reporter@resolvehub.com` | `reporter123` | `REPORTER` |
-
----
-
-## OpenAPI & Swagger UI
-
-ResolveHub includes interactive API documentation generated automatically via Springdoc OpenAPI 3.0.
-
-- **Swagger UI**: [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html)
-- **OpenAPI JSON**: [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs)
-
-### Authenticating in Swagger UI
-1. Open [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html).
-2. Click the green **Authorize** button at the top right.
-3. Enter username (e.g. `admin@resolvehub.com`) and password (e.g. `admin123`).
-4. Click **Authorize** and execute protected endpoints directly in the browser.
 
 ---
 
@@ -169,7 +203,7 @@ All API errors are intercepted by `GlobalExceptionHandler` (`@RestControllerAdvi
 
 ```json
 {
-  "timestamp": "2026-08-30T22:15:00",
+  "timestamp": "2026-08-30T22:35:00",
   "status": 403,
   "error": "Forbidden",
   "message": "Access denied: insufficient permissions to access this resource",
@@ -186,7 +220,7 @@ ResolveHub separates base configuration from environment-specific profiles. Hard
 ### Environment Variables
 | Variable | Default Value | Description |
 |---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/resolvehub` | PostgreSQL JDBC connection URL |
+| `DB_URL` | `jdbc:postgresql://postgres:5432/resolvehub` | PostgreSQL JDBC connection URL |
 | `DB_USERNAME` | `postgres` | Database username |
 | `DB_PASSWORD` | `password` | Database password |
 | `HIBERNATE_DDL_AUTO` | `update` | Hibernate schema mode (`update`, `validate`, `none`) |
@@ -212,29 +246,16 @@ mvn clean test
 
 ---
 
-## Getting Started
+## Docker Commands Cheat Sheet
 
-### Prerequisites
-- **Java 21** or later
-- **Maven 3.8+**
-- **PostgreSQL 14+** (for local development runtime)
-
-### Running Locally
-```bash
-# Clone the repository
-git clone https://github.com/ayesha/ResolveHub.git
-cd ResolveHub
-
-# (Optional) Export custom PostgreSQL credentials
-export DB_URL="jdbc:postgresql://localhost:5432/resolvehub"
-export DB_USERNAME="postgres"
-export DB_PASSWORD="your_password"
-
-# Run with Maven
-mvn spring-boot:run
-```
-
-Once started, access the API at `http://localhost:8081` and Swagger UI at `http://localhost:8081/swagger-ui.html`.
+| Command | Purpose |
+|---|---|
+| `docker compose up --build -d` | Build images, start containers in background, and create volumes |
+| `docker compose ps` | View status and health of all orchestrated containers |
+| `docker compose logs -f app` | Follow real-time application logs for ResolveHub |
+| `docker compose logs -f postgres` | Follow real-time PostgreSQL database logs |
+| `docker compose down` | Gracefully stop and remove containers and network (**preserves database data**) |
+| `docker compose down -v` | Stop containers and **delete all database volumes** (wipes persistent storage) |
 
 ---
 
@@ -266,9 +287,14 @@ src/
     │   └── service/            # TicketServiceTest (Mockito)
     └── resources/
         └── application.properties # Isolated H2 test config
+├── .dockerignore               # Docker build context exclusion rules
+├── .env.example                # Example environment configuration
+├── Dockerfile                  # Multi-stage Java 21 build & runtime
+├── docker-compose.yml          # PostgreSQL & App orchestration with healthcheck
+└── pom.xml                     # Maven project definition
 ```
 
 ---
 
-**ResolveHub** · Java 21 · Spring Boot 3.5.5 · Spring Security 6 · PostgreSQL · Hibernate · OpenAPI 3.0  
+**ResolveHub** · Java 21 · Spring Boot 3.5.5 · Spring Security 6 · PostgreSQL 17 · Docker Compose · OpenAPI 3.0  
 © 2026 Ayesha

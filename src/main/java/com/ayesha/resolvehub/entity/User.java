@@ -1,5 +1,6 @@
 package com.ayesha.resolvehub.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 @Entity
@@ -15,16 +16,37 @@ public class User {
     @Column(unique = true, nullable = false)
     private String email;
 
-    private String role;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Role role = Role.REPORTER;
+
+    @JsonIgnore
+    @Column(nullable = true)
+    private String password;
 
     public User() {
+    }
+
+    public User(Long id, String name, String email, Role role) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.role = role != null ? role : Role.REPORTER;
     }
 
     public User(Long id, String name, String email, String role) {
         this.id = id;
         this.name = name;
         this.email = email;
-        this.role = role;
+        this.role = Role.fromString(role);
+    }
+
+    public User(Long id, String name, String email, Role role, String password) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.role = role != null ? role : Role.REPORTER;
+        this.password = password;
     }
 
     public Long getId() {
@@ -51,11 +73,33 @@ public class User {
         this.email = email;
     }
 
-    public String getRole() {
+    public Role getRole() {
         return role;
     }
 
+    public void setRole(Role role) {
+        this.role = role != null ? role : Role.REPORTER;
+    }
+
     public void setRole(String role) {
-        this.role = role;
+        this.role = Role.fromString(role);
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    @Override
+    public String toString() {
+        return "User{" +
+            "id=" + id +
+            ", name='" + name + '\'' +
+            ", email='" + email + '\'' +
+            ", role=" + role +
+            '}';
     }
 }

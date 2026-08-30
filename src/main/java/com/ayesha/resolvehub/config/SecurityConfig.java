@@ -67,7 +67,7 @@ public class SecurityConfig {
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
-            .httpBasic(Customizer.withDefaults())
+            .httpBasic(basic -> basic.authenticationEntryPoint(authenticationEntryPoint()))
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(authenticationEntryPoint())
                 .accessDeniedHandler(accessDeniedHandler())
@@ -80,6 +80,7 @@ public class SecurityConfig {
     public AuthenticationEntryPoint authenticationEntryPoint() {
         return (request, response, authException) -> {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setHeader("WWW-Authenticate", "Basic realm=\"ResolveHub\"");
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
             ApiErrorResponse error = new ApiErrorResponse(
@@ -91,6 +92,7 @@ public class SecurityConfig {
             );
 
             response.getWriter().write(objectMapper.writeValueAsString(error));
+            response.getWriter().flush();
         };
     }
 
@@ -109,6 +111,7 @@ public class SecurityConfig {
             );
 
             response.getWriter().write(objectMapper.writeValueAsString(error));
+            response.getWriter().flush();
         };
     }
 }
