@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Tickets", description = "Ticket management, dynamic search, assignments, activities, and discussion APIs")
@@ -158,11 +159,13 @@ public class TicketController {
         return ticketService.getComments(id, page, size);
     }
 
-    @Operation(summary = "Delete ticket", description = "Deletes a ticket and cascades removal to associated comments and activities")
+    @Operation(summary = "Delete ticket", description = "Deletes a ticket and cascades removal to associated comments and activities (ADMIN only)")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Ticket deleted successfully"),
+        @ApiResponse(responseCode = "403", description = "Access denied: requires ADMIN role", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
         @ApiResponse(responseCode = "404", description = "Ticket not found", content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public void deleteTicket(
         @Parameter(description = "Ticket ID", example = "1") @PathVariable Long id

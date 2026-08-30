@@ -2,24 +2,26 @@
 
 [![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-brightgreen)](https://spring.io/projects/spring-boot)
+[![Spring Security](https://img.shields.io/badge/Spring%20Security-6.x-green)](https://spring.io/projects/spring-security)
 [![Build](https://img.shields.io/badge/Build-Maven-blue)](https://maven.apache.org/)
 [![Database](https://img.shields.io/badge/Database-PostgreSQL-blue)](https://www.postgresql.org/)
 [![ORM](https://img.shields.io/badge/ORM-Hibernate-brown)](https://hibernate.org/)
 [![Documentation](https://img.shields.io/badge/API%20Docs-OpenAPI%20%2F%20Swagger-green)](http://localhost:8081/swagger-ui.html)
-[![Tests](https://img.shields.io/badge/Tests-47%20Passed-success)](src/test/java)
+[![Tests](https://img.shields.io/badge/Tests-57%20Passed-success)](src/test/java)
 
-**ResolveHub** is a backend issue-tracking and resolution platform built with **Java 21, Spring Boot, Spring MVC, Spring Data JPA, Hibernate, and PostgreSQL**.
+**ResolveHub** is an enterprise-grade issue-tracking and resolution platform built with **Java 21, Spring Boot, Spring Security, Spring MVC, Spring Data JPA, Hibernate, and PostgreSQL**.
 
-The system models a real-world ticket management workflow where users can create, assign, update, filter, comment on, and audit issues across projects with strict state machines, database pagination, dynamic querying, and centralized exception handling.
+The system models a real-world ticket management workflow where users authenticate via **HTTP Basic Auth**, are authorized using strict **Role-Based Access Control (RBAC)** (`REPORTER`, `AGENT`, `ADMIN`), and can create, assign, update, filter, comment on, and audit issues across projects with transaction-safe state machines and centralized error handling.
 
 ---
 
 ## Table of Contents
 - [Features](#features)
-- [Architecture](#architecture)
+- [Architecture & Security Flow](#architecture--security-flow)
+- [Security & Authentication Model](#security--authentication-model)
 - [Domain Model](#domain-model)
 - [OpenAPI & Swagger UI](#openapi--swagger-ui)
-- [REST API Endpoints](#rest-api-endpoints)
+- [REST API Endpoints & Permissions](#rest-api-endpoints--permissions)
 - [Dynamic Filtering & Search](#dynamic-filtering--search)
 - [Audit Activities & Comments](#audit-activities--comments)
 - [Global Exception Handling](#global-exception-handling)
@@ -32,76 +34,78 @@ The system models a real-world ticket management workflow where users can create
 
 ## Features
 
-- **Layered Architecture**: Strict separation of concerns across Controller, DTO, Service, Repository, and Entity layers.
+- **Role-Based Security**: Spring Security integration with `REPORTER`, `AGENT`, and `ADMIN` roles.
+- **BCrypt Password Hashing**: Passwords hashed with salted BCrypt before persistence and strictly protected from JSON serialization and logs.
+- **Stateless REST Security**: HTTP Basic authentication over stateless sessions with explicit CSRF disabling justification.
+- **Interactive OpenAPI Documentation**: Embedded Swagger UI 3.0 specification with `basicAuth` authentication support.
+- **Layered Architecture**: Strict separation across Controller, DTO, Service, Repository, and Security layers.
 - **Transactional State Transitions**: Enforces valid ticket status transitions (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`).
 - **Dynamic Filtering with JPA Specifications**: Composable multi-criteria search without combinatorial repository methods.
 - **Database Pagination & Whitelist Sorting**: Database-level `LIMIT`/`OFFSET` queries with sort field whitelisting to protect against injection.
 - **Automated Audit Logging**: Append-only activity history tracking ticket creation, status changes, assignments, and priority updates.
 - **Paginated Discussions**: Ticket comments with author metadata and N+1 query prevention using `@EntityGraph`.
 - **Centralized Exception Handling**: Uniform REST error responses via `@RestControllerAdvice` and `ApiErrorResponse` DTOs.
-- **Interactive OpenAPI Documentation**: Embedded Swagger UI 3.0 specification powered by Springdoc.
 - **Environment-Aware Configuration**: Profile-driven configuration (`dev`, `prod`, `test`) without hardcoded secrets.
-- **Comprehensive Automated Test Suite**: 47 automated tests covering Unit, MockMvc, JPA Data, and Integration workflows.
+- **Comprehensive Automated Test Suite**: 57 automated tests covering Security, Unit, MockMvc, JPA Data, and Integration workflows.
 
 ---
 
-## Architecture
+## Architecture & Security Flow
 
 ```mermaid
 flowchart TD
 
-    Client["REST Client / Swagger UI"] --> Controller["Controller Layer (@RestController)"]
+    Client["Client / Swagger UI"] -->|"HTTP Request (Basic Auth Header)"| FilterChain["SecurityFilterChain"]
 
-    Controller --> DTO["Request / Response DTOs"]
+    FilterChain -->|"Extract Credentials"| AuthFilter["BasicAuthenticationFilter"]
 
-    Controller --> ExceptionHandler["GlobalExceptionHandler (@RestControllerAdvice)"]
+    AuthFilter --> UserDetailsService["CustomUserDetailsService"]
 
-    DTO --> Service["Service Layer (@Service, @Transactional)"]
+    UserDetailsService -->|"findByEmail"| UserRepository["UserRepository / DB"]
 
-    Service --> Repository["Repository Layer (JpaRepository, JpaSpecificationExecutor)"]
+    UserRepository -->|"Hashed Password"| PasswordEncoder["BCryptPasswordEncoder"]
 
-    Repository --> JPA["Spring Data JPA / CriteriaBuilder"]
+    PasswordEncoder -->|"Validate & Create"| Principal["Authenticated Principal (Roles: REPORTER/AGENT/ADMIN)"]
 
-    JPA --> Hibernate["Hibernate ORM (Persistence Context, Dirty Checking)"]
+    Principal -->|"Role & Method Rules"| Controller["TicketController (@PreAuthorize)"]
 
-    Hibernate --> PostgreSQL["PostgreSQL (Production) / H2 (Testing)"]
+    Controller --> Service["TicketService (@Transactional)"]
+
+    Service --> Repository["TicketRepository / JPA"]
+
+    Repository --> Hibernate["Hibernate ORM"]
+
+    Hibernate --> DB["PostgreSQL / H2"]
 ```
 
-| Layer | Responsibility |
+---
+
+## Security & Authentication Model
+
+### Core Concepts: Authentication vs Authorization
+- **Authentication ("Who are you?")**: Identifies the calling principal using their email and BCrypt-verified password credentials via HTTP Basic header.
+- **Authorization ("What are you allowed to do?")**: Determines whether the authenticated principal possesses the required `Role` (`ROLE_REPORTER`, `ROLE_AGENT`, `ROLE_ADMIN`) to access the requested URI and HTTP method.
+
+### Role Hierarchy & Permissions
+| Role | Permitted Operations |
 |---|---|
-| **Controller** | HTTP request routing, parameter validation (`@Valid`), OpenAPI documentation |
-| **DTO** | Clean API request/response contracts isolating internal JPA proxies |
-| **Service** | Business logic, state machines, atomic transaction boundaries (`@Transactional`) |
-| **Repository** | Data persistence, Spring Data Specifications, `@EntityGraph` optimization |
-| **Exception Handler** | Global error translation into structured `ApiErrorResponse` |
-| **Database** | PostgreSQL relational storage |
+| **`PUBLIC`** | OpenAPI specifications (`/v3/api-docs/**`) and Swagger UI (`/swagger-ui/**`, `/swagger-ui.html`) |
+| **`REPORTER`** | View tickets & search, view ticket activities, post tickets, post comments |
+| **`AGENT`** | All `REPORTER` capabilities + assign tickets, update ticket status, update ticket details |
+| **`ADMIN`** | Complete system access including deleting tickets, project management, and user administration |
 
----
+### 401 Unauthorized vs 403 Forbidden
+- **`401 Unauthorized`**: Returned when credentials are missing, malformed, or invalid (e.g. bad password or non-existent email).
+- **`403 Forbidden`**: Returned when the user is authenticated, but their assigned role does not grant sufficient permission for the requested action (e.g. a `REPORTER` attempting to delete a ticket or change status).
 
-## Domain Model
+### Default Development Credentials
+When running locally with the default/dev profile, ResolveHub initializes the following seed accounts:
 
-```mermaid
-flowchart TD
-
-    Project["Project"] -->|1 : N| Ticket["Ticket"]
-
-    Ticket -->|Reporter| User1["User (Reporter)"]
-
-    Ticket -->|Assignee| User2["User (Assignee)"]
-
-    Ticket -->|1 : N| Activity["TicketActivity (Audit Trail)"]
-
-    Ticket -->|1 : N| Comment["TicketComment (Discussions)"]
-
-    Comment -->|Author| User3["User (Author)"]
-```
-
-### Entity Hierarchy
-- **Project**: Represents a project scope with a project lead.
-- **User**: System users acting as reporters, assignees, or comment authors.
-- **Ticket**: Core entity with `id`, `title`, `description`, `status`, `priority`, `project`, `reporter`, `assignee`, `createdAt`, `updatedAt`.
-- **TicketActivity**: Append-only audit record capturing action, description, oldValue, newValue, and timestamp.
-- **TicketComment**: Discussion comments mapped with lazy associations to `Ticket` and `User`.
+| Email | Password | Role |
+|---|---|---|
+| `admin@resolvehub.com` | `admin123` | `ADMIN` |
+| `agent@resolvehub.com` | `agent123` | `AGENT` |
+| `reporter@resolvehub.com` | `reporter123` | `REPORTER` |
 
 ---
 
@@ -112,30 +116,31 @@ ResolveHub includes interactive API documentation generated automatically via Sp
 - **Swagger UI**: [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html)
 - **OpenAPI JSON**: [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs)
 
-From Swagger UI, you can inspect all endpoints, request schemas, parameters, sample payloads, and execute live API calls.
+### Authenticating in Swagger UI
+1. Open [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html).
+2. Click the green **Authorize** button at the top right.
+3. Enter username (e.g. `admin@resolvehub.com`) and password (e.g. `admin123`).
+4. Click **Authorize** and execute protected endpoints directly in the browser.
 
 ---
 
-## REST API Endpoints
+## REST API Endpoints & Permissions
 
-### Ticket Management & Workflows
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/tickets` | Search tickets with dynamic filters, pagination, and sorting |
-| `GET` | `/api/tickets/{id}` | Retrieve single ticket details by ID |
-| `POST` | `/api/tickets` | Create a new ticket (initiates `OPEN` status and logs `CREATED` activity) |
-| `PUT` | `/api/tickets/{id}` | Update ticket title, description, and priority |
-| `PATCH` | `/api/tickets/{id}/assignee` | Assign ticket to user (logs `ASSIGNED` activity) |
-| `PATCH` | `/api/tickets/{id}/status` | Transition ticket status (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`) |
-| `PATCH` | `/api/tickets/{id}/assign-and-start` | Atomically assign ticket and set status to `IN_PROGRESS` |
-| `DELETE` | `/api/tickets/{id}` | Delete ticket (cascades to activities and comments) |
-
-### Activities & Comments
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/tickets/{id}/activities` | Retrieve audit history ordered newest to oldest |
-| `POST` | `/api/tickets/{id}/comments` | Add a discussion comment to a ticket |
-| `GET` | `/api/tickets/{id}/comments` | Retrieve paginated comments for a ticket (newest first) |
+| Method | Endpoint | Required Role | Description |
+|---|---|---|---|
+| `GET` | `/v3/api-docs/**` | `PUBLIC` | Raw OpenAPI 3.0 specification |
+| `GET` | `/swagger-ui/**` | `PUBLIC` | Interactive Swagger UI assets |
+| `GET` | `/api/tickets` | `REPORTER`, `AGENT`, `ADMIN` | Search tickets with dynamic filters, pagination, and sorting |
+| `GET` | `/api/tickets/{id}` | `REPORTER`, `AGENT`, `ADMIN` | Retrieve single ticket details by ID |
+| `POST` | `/api/tickets` | `REPORTER`, `AGENT`, `ADMIN` | Create a new ticket (status `OPEN`, logs `CREATED` activity) |
+| `PUT` | `/api/tickets/{id}` | `AGENT`, `ADMIN` | Update ticket title, description, and priority |
+| `PATCH` | `/api/tickets/{id}/assignee` | `AGENT`, `ADMIN` | Assign ticket to user (logs `ASSIGNED` activity) |
+| `PATCH` | `/api/tickets/{id}/status` | `AGENT`, `ADMIN` | Transition ticket status (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`) |
+| `PATCH` | `/api/tickets/{id}/assign-and-start` | `AGENT`, `ADMIN` | Atomically assign ticket and set status to `IN_PROGRESS` |
+| `GET` | `/api/tickets/{id}/activities` | `REPORTER`, `AGENT`, `ADMIN` | Retrieve audit history ordered newest to oldest |
+| `POST` | `/api/tickets/{id}/comments` | `REPORTER`, `AGENT`, `ADMIN` | Add a discussion comment to a ticket |
+| `GET` | `/api/tickets/{id}/comments` | `REPORTER`, `AGENT`, `ADMIN` | Retrieve paginated comments for a ticket (newest first) |
+| `DELETE` | `/api/tickets/{id}` | `ADMIN` (`@PreAuthorize`) | Delete ticket (cascades to activities and comments) |
 
 ---
 
@@ -156,18 +161,6 @@ The search endpoint `GET /api/tickets` uses composable **Spring Data JPA Specifi
 - `sort`: Whitelisted sort field (`createdAt`, `updatedAt`, `priority`, `status`, `title`, `id`)
 - `direction`: `asc` or `desc` (default `desc`)
 
-### Example Filter Requests
-```http
-# Filter by Status & Priority
-GET /api/tickets?status=OPEN&priority=HIGH
-
-# Filter by Project & Text Search
-GET /api/tickets?projectId=1&search=gateway&page=0&size=10
-
-# Multi-Filter with Sorting
-GET /api/tickets?status=IN_PROGRESS&assigneeId=2&sort=priority&direction=asc
-```
-
 ---
 
 ## Global Exception Handling
@@ -176,26 +169,11 @@ All API errors are intercepted by `GlobalExceptionHandler` (`@RestControllerAdvi
 
 ```json
 {
-  "timestamp": "2026-08-30T18:35:00",
-  "status": 404,
-  "error": "Not Found",
-  "message": "Ticket with id 42 was not found",
-  "path": "/api/tickets/42"
-}
-```
-
-When validation fails (`@Valid`), field errors are cleanly mapped:
-```json
-{
-  "timestamp": "2026-08-30T18:35:10",
-  "status": 400,
-  "error": "Validation Failed",
-  "message": "Request validation failed",
-  "path": "/api/tickets",
-  "fieldErrors": {
-    "title": "Title is required",
-    "projectId": "Project ID is required"
-  }
+  "timestamp": "2026-08-30T22:15:00",
+  "status": 403,
+  "error": "Forbidden",
+  "message": "Access denied: insufficient permissions to access this resource",
+  "path": "/api/tickets/1"
 }
 ```
 
@@ -215,26 +193,22 @@ ResolveHub separates base configuration from environment-specific profiles. Hard
 | `SHOW_SQL` | `false` | Enable SQL query printing |
 | `SPRING_PROFILES_ACTIVE` | `dev` | Active profile (`dev`, `prod`, `test`) |
 
-### Profiles
-- **`application-dev.properties`**: Enables SQL formatting and schema updating for rapid local development.
-- **`application-prod.properties`**: Disables SQL logging and sets `ddl-auto=validate` for production safety.
-- **`application.properties` (test)**: Configures isolated in-memory H2 database for zero-dependency unit and integration testing.
-
 ---
 
 ## Automated Testing
 
-ResolveHub includes 47 automated tests with 100% pass rate:
+ResolveHub includes 57 automated tests with 100% pass rate:
 
 ```bash
 mvn clean test
 ```
 
-### Test Strategy
-1. **Service Unit Tests (`TicketServiceTest`)**: Mockito-based tests verifying core business logic, status state transitions, assignment rules, activity logging, and comment workflows.
-2. **Controller Tests (`TicketControllerTest`)**: Web-layer MockMvc tests verifying HTTP status codes, validation constraints, DTO mapping, and global error handling.
-3. **Repository Tests (`TicketRepositoryTest`)**: `@DataJpaTest` tests verifying derived queries, Specification filters, date boundaries, and `@EntityGraph` eager author fetching.
-4. **Integration Tests (`TicketWorkflowIntegrationTest`)**: `@SpringBootTest` end-to-end tests validating complete ticket lifecycle from creation to assignment, commenting, and auditing.
+### Test Suite Summary
+1. **Security Integration Tests (`SecurityIntegrationTest`)**: 10 tests verifying 401 unauthenticated, 401 invalid credentials, 403 RBAC violations, 200 permitted role actions, Swagger doc availability, and password non-leakage.
+2. **Service Unit Tests (`TicketServiceTest`)**: 23 Mockito tests verifying business rules, workflows, status transitions, activities, and comments.
+3. **Controller Tests (`TicketControllerTest`)**: 14 Web-layer MockMvc tests with `@WithMockUser` verifying validation and DTO mapping.
+4. **Repository Tests (`TicketRepositoryTest`)**: 9 `@DataJpaTest` tests verifying Specifications, date queries, and `@EntityGraph`.
+5. **Workflow Integration Tests (`TicketWorkflowIntegrationTest`)**: 1 `@SpringBootTest` validating full multi-step ticket lifecycles.
 
 ---
 
@@ -270,14 +244,15 @@ Once started, access the API at `http://localhost:8081` and Swagger UI at `http:
 src/
 ├── main/
 │   ├── java/com/ayesha/resolvehub/
-│   │   ├── config/             # OpenAPI and app configuration
-│   │   ├── controller/         # REST API endpoints & Swagger docs
+│   │   ├── config/             # SecurityConfig, OpenApiConfig, SecurityDataInitializer
+│   │   ├── controller/         # REST API endpoints & Swagger annotations
 │   │   ├── dto/                # Request & Response DTOs with @Schema
-│   │   ├── entity/             # JPA Entities (Ticket, User, Project, Activity, Comment)
+│   │   ├── entity/             # JPA Entities (User, Role, Ticket, Project, Activity, Comment)
 │   │   ├── exception/          # Domain exceptions & GlobalExceptionHandler
 │   │   ├── repository/         # Spring Data repositories & JPA Specifications
 │   │   │   ├── projection/     # Interface-based projections (TicketSummary)
 │   │   │   └── specification/  # Composable Specifications (TicketSpecification)
+│   │   ├── security/           # CustomUserDetailsService
 │   │   └── service/            # Transactional business logic
 │   └── resources/
 │       ├── application.properties
@@ -285,8 +260,8 @@ src/
 │       └── application-prod.properties
 └── test/
     ├── java/com/ayesha/resolvehub/
-    │   ├── controller/         # TicketControllerTest (MockMvc)
-    │   ├── integration/        # TicketWorkflowIntegrationTest (SpringBootTest)
+    │   ├── controller/         # TicketControllerTest (MockMvc + @WithMockUser)
+    │   ├── integration/        # SecurityIntegrationTest, TicketWorkflowIntegrationTest
     │   ├── repository/         # TicketRepositoryTest (DataJpaTest)
     │   └── service/            # TicketServiceTest (Mockito)
     └── resources/
@@ -295,5 +270,5 @@ src/
 
 ---
 
-**ResolveHub** · Java 21 · Spring Boot 3.5.5 · PostgreSQL · Hibernate · OpenAPI 3.0  
+**ResolveHub** · Java 21 · Spring Boot 3.5.5 · Spring Security 6 · PostgreSQL · Hibernate · OpenAPI 3.0  
 © 2026 Ayesha
