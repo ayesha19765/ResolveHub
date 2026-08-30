@@ -6,7 +6,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "tickets")
+@Table(name = "tickets", indexes = {
+    @Index(name = "idx_tickets_status", columnList = "status"),
+    @Index(name = "idx_tickets_priority", columnList = "priority"),
+    @Index(name = "idx_tickets_project_id", columnList = "project_id"),
+    @Index(name = "idx_tickets_assignee_id", columnList = "assignee_id"),
+    @Index(name = "idx_tickets_reporter_id", columnList = "reporter_id"),
+    @Index(name = "idx_tickets_created_at", columnList = "createdAt")
+})
 public class Ticket {
 
     @Id

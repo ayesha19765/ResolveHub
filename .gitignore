@@ -35,6 +35,14 @@ build/
 ### VS Code ###
 .vscode/
 
+### Logs ###
+*.log
+
+### Environment Variables & Secrets ###
+.env
+.env.local
+.env.*.local
+
 ### Mac OS ###
 .DS_Store
 .prettierrc
