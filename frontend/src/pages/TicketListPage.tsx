@@ -9,10 +9,8 @@ import { Pagination } from '../components/Pagination';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
   Search,
-  Filter,
   PlusCircle,
   RotateCcw,
-  ArrowUpDown,
   AlertCircle,
   Ticket as TicketIcon
 } from 'lucide-react';
