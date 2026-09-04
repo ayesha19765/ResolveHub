@@ -1,44 +1,169 @@
 # ResolveHub
 
-[![Java](https://img.shields.io/badge/Java-21-orange)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-brightgreen)](https://spring.io/projects/spring-boot)
-[![Spring Security](https://img.shields.io/badge/Spring%20Security-6.x-green)](https://spring.io/projects/spring-security)
-[![React](https://img.shields.io/badge/React-18-blue)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-6.0-purple)](https://vitejs.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Multi--stage-blue)](https://www.docker.com/)
-[![Database](https://img.shields.io/badge/Database-PostgreSQL%2017-blue)](https://www.postgresql.org/)
-[![Documentation](https://img.shields.io/badge/API%20Docs-OpenAPI%20%2F%20Swagger-green)](http://localhost:8081/swagger-ui.html)
-[![Tests](https://img.shields.io/badge/Tests-57%20Passed-success)](src/test/java)
+![Java](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-brightgreen)
+![Spring Security](https://img.shields.io/badge/Spring%20Security-6.x-green)
+![React](https://img.shields.io/badge/React-18-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue)
+![Docker](https://img.shields.io/badge/Docker-Compose-blue)
+![Tests](https://img.shields.io/badge/Tests-57%20Passed-success)
 
-ResolveHub is an enterprise issue-tracking and ticket resolution platform built with **Java 21, Spring Boot 3, Spring Security 6, Spring Data JPA, Hibernate 6, PostgreSQL 17, Docker Compose, and React 18**.
+ResolveHub is a full-stack issue tracking and ticket management system built to explore how a real-world backend handles **authentication, authorization, ticket workflows, relational data, search, pagination, transactions, and audit history**.
 
-The system enforces deterministic ticket state transitions, Role-Based Access Control (`REPORTER`, `AGENT`, `ADMIN`), dynamic multi-criteria search with JPA Specifications, server-side pagination, N+1 query optimization via `@EntityGraph`, and immutable audit activity logging.
+The backend is built with **Java 21 and Spring Boot**, backed by **PostgreSQL**, while the frontend is a small **React + TypeScript** application. The project is also containerized with Docker Compose.
+
+A major focus of the project was not just getting the CRUD operations working, but understanding what happens around them — things like preventing invalid state changes, avoiding N+1 queries, keeping multi-step operations atomic, and designing APIs that remain predictable as features are added.
 
 ---
 
-## Overview
+## What ResolveHub Does
 
-In engineering and operations teams, ticket management systems must ensure strict data integrity, auditability, and access control. ResolveHub demonstrates a production-grade backend architecture where:
-- Access permissions are enforced at the HTTP and method level.
-- Multi-step business workflows execute inside atomic transaction boundaries.
-- Relational data is fetched efficiently without Cartesian explosions or N+1 query bottlenecks.
-- Dynamic search queries are generated cleanly at runtime without combinatorial repository method sprawl.
+A ticket can move through the following workflow:
+
+```text
+OPEN → IN_PROGRESS → RESOLVED → CLOSED
+```
+
+Different users have different responsibilities:
+
+* **REPORTER** — can create tickets, view tickets, and participate in discussions
+* **AGENT** — can work on tickets, assign them, update details, and change their status
+* **ADMIN** — has full access, including deleting tickets
+
+Every important ticket change is recorded in an activity history so that changes such as assignments, priority updates, and status transitions can be tracked.
 
 ---
 
 ## Key Features
 
-- **Role-Based Access Control (RBAC)**: Enforces `REPORTER`, `AGENT`, and `ADMIN` permissions using Spring Security 6, HTTP Basic authentication, and salted BCrypt password hashing.
-- **Deterministic State Machine**: Enforces valid ticket status transitions (`OPEN` $\rightarrow$ `IN_PROGRESS` $\rightarrow$ `RESOLVED` $\rightarrow$ `CLOSED`) and rejects illegal regressions.
-- **Dynamic Search Engine**: Composable JPA Specifications supporting keyword search, status, priority, project, assignee, and date boundaries in a single query.
-- **Safe Server-Side Pagination & Sorting**: Database-level `LIMIT`/`OFFSET` queries with sort field whitelisting (`createdAt`, `updatedAt`, `priority`, `status`, `title`, `id`).
-- **N+1 Query Optimization**: Strategic use of JPA `@EntityGraph` and `JOIN FETCH` to load related entity graphs in single SQL queries.
-- **Append-Only Audit History**: Tracks ticket creation, assignment changes, priority changes, and status transitions for complete traceability.
-- **Paginated Discussion Threads**: Ticket commenting subsystem with author metadata and eager fetch optimization.
-- **Centralized REST Error Handling**: Uniform `ApiErrorResponse` JSON contracts for validation errors, 401 unauthenticated, 403 forbidden, and 404 not found states.
-- **Multi-Stage Dockerization**: Multi-stage `Dockerfile` with Eclipse Temurin Java 21 non-root runtime, PostgreSQL 17 service, health checks (`pg_isready`), and persistent volumes.
-- **React 18 SPA Frontend**: Lightweight TypeScript dashboard featuring role-aware UI controls, search toolbars, and status workflows.
+### Authentication & Authorization
+
+* HTTP Basic Authentication using Spring Security
+* Role-based access control for `REPORTER`, `AGENT`, and `ADMIN`
+* BCrypt password hashing
+* Method-level authorization with `@PreAuthorize`
+* Consistent `401` and `403` responses
+* Passwords are excluded from API responses
+
+### Ticket Workflow
+
+* Explicit ticket state transitions
+* Invalid status changes are rejected
+* Assignment and status updates can happen as part of the same transaction
+* Ticket activity is recorded whenever important changes occur
+
+### Search & Filtering
+
+Tickets can be searched using multiple filters at the same time:
+
+* Status
+* Priority
+* Project
+* Assignee
+* Reporter
+* Keyword
+* Creation date range
+
+The filtering is implemented using **Spring Data JPA Specifications**, rather than creating a separate repository method for every possible combination.
+
+For example:
+
+```text
+GET /api/tickets?status=OPEN&priority=HIGH&search=payment&projectId=1&page=0&size=10
+```
+
+### Pagination & Sorting
+
+* Pagination is handled on the database side using Spring Data `Pageable`
+* Page size is limited to 100 records
+* Sort fields are whitelisted
+* Invalid sort fields return a `400 Bad Request`
+
+Supported sort fields:
+
+```text
+createdAt
+updatedAt
+priority
+status
+title
+id
+```
+
+### Audit History
+
+Important ticket changes create an append-only `TicketActivity` record containing:
+
+* Action performed
+* Human-readable description
+* Previous value
+* New value
+* Timestamp
+
+For example:
+
+```text
+STATUS_CHANGED
+OPEN → IN_PROGRESS
+```
+
+### Comments
+
+Tickets support discussion threads with:
+
+* Comment authors
+* Timestamps
+* Paginated responses
+* Optimized author fetching
+
+### N+1 Query Prevention
+
+Ticket comments contain a relationship to their author. Loading each author separately can result in the classic N+1 query problem.
+
+For the relevant repository query, `@EntityGraph` is used to fetch the author together with the comments:
+
+```java
+@EntityGraph(attributePaths = {"author"})
+Page<TicketComment> findByTicketIdOrderByCreatedAtDesc(
+        Long ticketId,
+        Pageable pageable
+);
+```
+
+This keeps the relationship `LAZY` by default while fetching the data needed by that endpoint in a single query.
+
+### Centralized Error Handling
+
+The API uses a common error response format for:
+
+* Validation errors
+* Authentication failures
+* Authorization failures
+* Missing resources
+* Invalid sorting parameters
+
+### Docker Support
+
+The project includes a Docker Compose setup containing:
+
+* Spring Boot application
+* PostgreSQL 17
+* PostgreSQL health checks
+* Persistent database volume
+* Multi-stage Java Docker build
+* Non-root application runtime
+
+### React Frontend
+
+The frontend is intentionally lightweight and provides:
+
+* Ticket listing
+* Search and filtering
+* Role-aware actions
+* Ticket status workflows
+* Discussion/comments
+* TypeScript-based API communication
 
 ---
 
@@ -46,394 +171,446 @@ In engineering and operations teams, ticket management systems must ensure stric
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["Frontend Client (Port 5173)"]
-        Browser["React 18 SPA (TypeScript + Vite)"]
-        AuthContext["AuthContext (HTTP Basic)"]
-        APIClient["Centralized API Client (Fetch + DTOs)"]
+
+    subgraph Client["React Frontend"]
+        Browser["React 18 + TypeScript + Vite"]
+        Auth["AuthContext"]
+        API["API Client"]
     end
 
-    subgraph SecurityLayer["Spring Security 6 (Port 8081)"]
-        FilterChain["SecurityFilterChain (Stateless / Basic Auth)"]
-        RBAC["Role Authorization (REPORTER / AGENT / ADMIN)"]
+    subgraph Backend["Spring Boot Backend"]
+        Security["Spring Security"]
+        Controller["REST Controllers"]
+        Exception["Global Exception Handler"]
+        Service["Service Layer"]
+        Specs["JPA Specifications"]
+        Repository["Spring Data Repositories"]
     end
 
-    subgraph WebLayer["Spring MVC Web Layer"]
-        Controller["TicketController (@RestController)"]
-        GlobalException["GlobalExceptionHandler (@RestControllerAdvice)"]
+    subgraph Database["Persistence"]
+        Hibernate["Hibernate / JPA"]
+        PostgreSQL[("PostgreSQL 17")]
     end
 
-    subgraph ServiceLayer["Business & Persistence Layer"]
-        Service["TicketService (@Transactional)"]
-        Specs["TicketSpecification (CriteriaBuilder Filters)"]
-        Repo["Spring Data Repositories (@EntityGraph, Projections)"]
-    end
-
-    subgraph DatabaseLayer["Relational Database Storage"]
-        Hibernate["Hibernate 6 ORM (Dirty Checking, B-Tree Indexes)"]
-        PostgreSQL[("PostgreSQL 17 Database")]
-    end
-
-    Browser --> AuthContext
-    AuthContext --> APIClient
-    APIClient -->|HTTP / JSON| FilterChain
-    FilterChain --> RBAC
-    RBAC --> Controller
-    Controller --> GlobalException
+    Browser --> Auth
+    Auth --> API
+    API --> Security
+    Security --> Controller
+    Controller --> Exception
     Controller --> Service
     Service --> Specs
-    Service --> Repo
-    Repo --> Hibernate
+    Service --> Repository
+    Repository --> Hibernate
     Hibernate --> PostgreSQL
 ```
 
 ### Request Flow
+
+A typical request follows this path:
+
 ```text
-Client (React / REST)
-  ↓ HTTP Request (Authorization: Basic <base64>)
-Spring Security Filter Chain (CORS -> BasicAuthenticationFilter -> AuthorizationFilter)
-  ↓ Authenticated Principal
-DispatcherServlet
-  ↓ Request Mapping & Argument Resolvers
-TicketController (@RestController)
-  ↓ @Valid DTO Validation (MethodArgumentNotValidException -> GlobalExceptionHandler)
-TicketService (@Service, @Transactional)
-  ↓ Business Validation & State Machine Execution
-Spring Data Repositories (TicketSpecification via CriteriaBuilder)
-  ↓ Hibernate Session & First-Level Cache (Dirty Checking)
-PostgreSQL 17 Database (B-Tree Indexes & Persistent Volume)
+React Client
+    ↓
+HTTP Request
+    ↓
+Spring Security
+    ↓
+Authentication + Role Check
+    ↓
+Controller
+    ↓
+DTO Validation
+    ↓
+Service Layer
+    ↓
+Business Rules / Transactions
+    ↓
+Repository
+    ↓
+Hibernate
+    ↓
+PostgreSQL
 ```
+
+Keeping the business logic in the service layer also makes it easier to keep transactions and domain rules in one place instead of spreading them across controllers and repositories.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technologies |
-|---|---|
-| **Backend Framework** | Spring Boot 3.5.5, Spring MVC, Spring Security 6 |
-| **Language & Runtime** | Java 21 (LTS), Eclipse Temurin OpenJDK |
-| **Persistence & ORM** | Spring Data JPA, Hibernate 6, Jakarta Persistence 3.1 |
-| **Database** | PostgreSQL 17 (Production/Compose), H2 (Test Isolation) |
-| **API Documentation** | Springdoc OpenAPI 3.0, Swagger UI |
-| **Containerization** | Docker, Docker Compose v2 |
-| **Testing** | JUnit 5, Mockito, MockMvc, AssertJ, Spring Security Test |
-| **Frontend** | React 18, TypeScript 5.6, Vite 6, Tailwind CSS 3.4 |
+| Layer               | Technology                         |
+| ------------------- | ---------------------------------- |
+| Language            | Java 21                            |
+| Backend             | Spring Boot 3.5.5                  |
+| Security            | Spring Security 6                  |
+| ORM                 | Hibernate 6 / Spring Data JPA      |
+| Database            | PostgreSQL 17                      |
+| API Documentation   | Springdoc OpenAPI / Swagger        |
+| Testing             | JUnit 5, Mockito, MockMvc, AssertJ |
+| Frontend            | React 18                           |
+| Frontend Language   | TypeScript 5.6                     |
+| Frontend Build Tool | Vite 6                             |
+| Styling             | Tailwind CSS                       |
+| Containerization    | Docker / Docker Compose            |
 
 ---
 
-## API Overview
+## API
 
-| Method | Endpoint | Purpose | Required Role | Request DTO | Response DTO |
-|---|---|---|---|---|---|
-| `GET` | `/v3/api-docs/**` | OpenAPI Specification | `PUBLIC` | None | JSON OpenAPI Schema |
-| `GET` | `/swagger-ui/**` | Swagger UI Documentation | `PUBLIC` | None | HTML / JS Assets |
-| `GET` | `/api/tickets` | Dynamic Search & Pagination | `REPORTER`, `AGENT`, `ADMIN` | Query Params | `Page<TicketResponse>` |
-| `GET` | `/api/tickets/{id}` | Get Ticket Details | `REPORTER`, `AGENT`, `ADMIN` | Path Variable | `TicketResponse` |
-| `POST` | `/api/tickets` | Create Ticket | `REPORTER`, `AGENT`, `ADMIN` | `CreateTicketRequest` | `TicketResponse` |
-| `PUT` | `/api/tickets/{id}` | Update Ticket Details | `AGENT`, `ADMIN` | `UpdateTicketRequest` | `Ticket` |
-| `PATCH` | `/api/tickets/{id}/assignee` | Assign Ticket to User | `AGENT`, `ADMIN` | `AssignTicketRequest` | `TicketResponse` |
-| `PATCH` | `/api/tickets/{id}/status` | Update Ticket Status | `AGENT`, `ADMIN` | `UpdateTicketStatusRequest` | `TicketResponse` |
-| `PATCH` | `/api/tickets/{id}/assign-and-start` | Assign & Start Working | `AGENT`, `ADMIN` | `AssignTicketRequest` | `TicketResponse` |
-| `GET` | `/api/tickets/{id}/activities` | Get Audit History | `REPORTER`, `AGENT`, `ADMIN` | Path Variable | `List<TicketActivityResponse>` |
-| `POST` | `/api/tickets/{id}/comments` | Add Discussion Comment | `REPORTER`, `AGENT`, `ADMIN` | `CreateCommentRequest` | `CommentResponse` |
-| `GET` | `/api/tickets/{id}/comments` | Get Paginated Comments | `REPORTER`, `AGENT`, `ADMIN` | Path Variable, `page`, `size` | `Page<CommentResponse>` |
-| `DELETE` | `/api/tickets/{id}` | Delete Ticket | `ADMIN` (`@PreAuthorize`) | Path Variable | `void` (HTTP 200) |
+The main API endpoints are:
+
+| Method   | Endpoint                             | Description                 | Role         |
+| -------- | ------------------------------------ | --------------------------- | ------------ |
+| `GET`    | `/api/tickets`                       | Search and paginate tickets | All roles    |
+| `GET`    | `/api/tickets/{id}`                  | Get ticket details          | All roles    |
+| `POST`   | `/api/tickets`                       | Create a ticket             | All roles    |
+| `PUT`    | `/api/tickets/{id}`                  | Update ticket details       | AGENT, ADMIN |
+| `PATCH`  | `/api/tickets/{id}/assignee`         | Assign a ticket             | AGENT, ADMIN |
+| `PATCH`  | `/api/tickets/{id}/status`           | Change ticket status        | AGENT, ADMIN |
+| `PATCH`  | `/api/tickets/{id}/assign-and-start` | Assign and start a ticket   | AGENT, ADMIN |
+| `GET`    | `/api/tickets/{id}/activities`       | View ticket history         | All roles    |
+| `POST`   | `/api/tickets/{id}/comments`         | Add a comment               | All roles    |
+| `GET`    | `/api/tickets/{id}/comments`         | Get paginated comments      | All roles    |
+| `DELETE` | `/api/tickets/{id}`                  | Delete a ticket             | ADMIN        |
+
+Swagger UI and the OpenAPI specification are also available when the application is running.
 
 ---
 
-## Authentication & Authorization
+## Authentication & Roles
 
-ResolveHub implements a stateless authentication model using **HTTP Basic Authentication** and **Role-Based Access Control (RBAC)**.
+ResolveHub uses HTTP Basic Authentication with three roles.
 
-### Role Permission Matrix
+| Operation             | REPORTER | AGENT | ADMIN |
+| --------------------- | :------: | :---: | :---: |
+| View & search tickets |     ✓    |   ✓   |   ✓   |
+| Create ticket         |     ✓    |   ✓   |   ✓   |
+| Add comments          |     ✓    |   ✓   |   ✓   |
+| Update ticket         |     —    |   ✓   |   ✓   |
+| Assign ticket         |     —    |   ✓   |   ✓   |
+| Change status         |     —    |   ✓   |   ✓   |
+| Delete ticket         |     —    |   —   |   ✓   |
 
-| Operation | `REPORTER` | `AGENT` | `ADMIN` |
-|---|:---:|:---:|:---:|
-| Browse & Search Tickets (`GET /api/tickets`) | Yes | Yes | Yes |
-| View Ticket Details & History (`GET /api/tickets/{id}`) | Yes | Yes | Yes |
-| Create Ticket (`POST /api/tickets`) | Yes | Yes | Yes |
-| Post Comment (`POST /api/tickets/{id}/comments`) | Yes | Yes | Yes |
-| Update Ticket Details (`PUT /api/tickets/{id}`) | No | Yes | Yes |
-| Assign Ticket (`PATCH /api/tickets/{id}/assignee`) | No | Yes | Yes |
-| Change Ticket Status (`PATCH /api/tickets/{id}/status`) | No | Yes | Yes |
-| Delete Ticket (`DELETE /api/tickets/{id}`) | No | No | Yes |
+Passwords are hashed using `BCryptPasswordEncoder` before being stored.
 
-### Password Security & Credentials
-- Passwords are encrypted using **salted BCrypt** (`BCryptPasswordEncoder`) before persistence.
-- The `User.password` field is annotated with `@JsonIgnore` to prevent serialization across API responses.
-- Passwords are never logged.
-- Seed credentials for local development are initialized only under `!test & !prod` profiles:
-  - **Admin**: `admin@resolvehub.com` / `admin123`
-  - **Agent**: `agent@resolvehub.com` / `agent123`
-  - **Reporter**: `reporter@resolvehub.com` / `reporter123`
+For local development, the application seeds test users when running outside the test and production profiles.
+
+> These credentials are intended only for local development. They should be changed or removed before deploying the application.
 
 ---
 
 ## Data Model
 
-```text
-    ┌──────────────┐ 1          * ┌──────────────┐
-    │     User     │─────────────<│   Project    │ (Owner)
-    └──────┬───────┘              └──────┬───────┘
-           │ 1                           │ 1
-           │                             │
-           │ * (Reporter / Assignee)     │ * (Project Tickets)
-           ▼                             ▼
-    ┌────────────────────────────────────────────┐
-    │                   Ticket                   │
-    └──────┬─────────────────────────────┬───────┘
-           │ 1                           │ 1
-           │                             │
-           │ *                           │ *
-           ▼                             ▼
-    ┌──────────────┐              ┌──────────────┐
-    │ TicketComment│              │TicketActivity│
-    └──────────────┘              └──────────────┘
-```
-
-- All `@ManyToOne` relationships are configured with `FetchType.LAZY` to prevent unconstrained eager joins.
-- Child collections (`comments`, `activities`) use `CascadeType.ALL` on the `Ticket` root.
-
----
-
-## Dynamic Filtering
-
-Instead of maintaining combinatorial repository methods, `TicketSpecification` leverages the JPA Criteria API (`CriteriaBuilder`) to compose query predicates dynamically:
+The main relationships look like this:
 
 ```text
-GET /api/tickets?status=OPEN&priority=HIGH&search=payment&projectId=1&page=0&size=10
+User
+ ├── owns → Project
+ ├── reports → Ticket
+ └── assigned to → Ticket
+
+Project
+ └── contains → Ticket
+
+Ticket
+ ├── has → TicketComment
+ └── has → TicketActivity
 ```
 
-### Supported Filter Parameters
-- `status`: Exact match (`OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`)
-- `priority`: Exact match (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`)
-- `projectId`: Filter by parent project
-- `assigneeId`: Filter by assigned user
-- `reporterId`: Filter by ticket creator
-- `search`: Case-insensitive `LIKE` matching across `title` OR `description`
-- `createdAfter` / `createdBefore`: ISO-8601 date range filters
+Entity relationships are kept `LAZY` by default, with specific fetch plans used where an endpoint needs related data.
+
+For example, comments use an `@EntityGraph` when their author information is required.
 
 ---
 
-## Pagination & Sorting
+## Database & Indexing
 
-- **Server-Side Execution**: Pagination is executed at the database level using `LIMIT` and `OFFSET` through Spring Data's `Pageable`.
-- **Page Size Clamping**: Clamped to a maximum of 100 records per request to prevent heap exhaustion.
-- **Sort Whitelisting**: Sort fields are strictly validated against an allowed set (`createdAt`, `updatedAt`, `priority`, `status`, `title`, `id`). Invalid sort fields throw `InvalidSortingException` (HTTP 400), preventing query syntax errors and property leakage.
+The ticket table contains indexes for the fields used frequently in filtering, joining, and sorting:
 
----
-
-## Database Indexing
-
-PostgreSQL B-Tree indexes are defined directly in entity annotations to optimize common query patterns:
-
-```java
-@Table(name = "tickets", indexes = {
-    @Index(name = "idx_tickets_status", columnList = "status"),
-    @Index(name = "idx_tickets_priority", columnList = "priority"),
-    @Index(name = "idx_tickets_project_id", columnList = "project_id"),
-    @Index(name = "idx_tickets_assignee_id", columnList = "assignee_id"),
-    @Index(name = "idx_tickets_reporter_id", columnList = "reporter_id"),
-    @Index(name = "idx_tickets_created_at", columnList = "createdAt")
-})
+```text
+status
+priority
+project_id
+assignee_id
+reporter_id
+created_at
 ```
 
-| Table | Index Name | Indexed Column | Query Pattern Supported |
-|---|---|---|---|
-| `tickets` | `idx_tickets_status` | `status` | Dynamic filter: `WHERE status = ?` |
-| `tickets` | `idx_tickets_priority` | `priority` | Dynamic filter: `WHERE priority = ?` |
-| `tickets` | `idx_tickets_project_id` | `project_id` | Foreign key joins & project filtering |
-| `tickets` | `idx_tickets_assignee_id`| `assignee_id` | Foreign key joins & assignee filtering |
-| `tickets` | `idx_tickets_reporter_id`| `reporter_id` | Foreign key joins & reporter filtering |
-| `tickets` | `idx_tickets_created_at` | `created_at` | Sorting: `ORDER BY created_at DESC` & date range queries |
-| `ticket_comments` | `idx_ticket_comments_ticket_id` | `ticket_id` | Fetching discussion comments by ticket |
-| `ticket_comments` | `idx_ticket_comments_created_at`| `created_at` | Ordering comments newest-first |
-| `ticket_activities`| `idx_ticket_activities_ticket_id`| `ticket_id`| Fetching audit history by ticket |
-| `ticket_activities`| `idx_ticket_activities_created_at`| `created_at`| Ordering audit events chronologically |
+There are also indexes on `ticket_id` and `created_at` for comments and activity history.
+
+This is especially useful for endpoints that combine filtering with pagination rather than loading the entire ticket table into memory.
 
 ---
 
-## N+1 Query Prevention
+## Transactions
 
-When retrieving discussion comments for a ticket, accessing `comment.getAuthor().getName()` on lazy proxies would trigger 1 initial query + $N$ secondary queries for each author.
+Several operations involve more than one database change, so they run inside a single transaction.
 
-ResolveHub solves this by applying JPA `@EntityGraph` on [`TicketCommentRepository`](file:///Users/ayesha/Downloads/ResolveHub/src/main/java/com/ayesha/resolvehub/repository/TicketCommentRepository.java):
+For example, creating a ticket involves:
 
-```java
-@EntityGraph(attributePaths = {"author"})
-Page<TicketComment> findByTicketIdOrderByCreatedAtDesc(Long ticketId, Pageable pageable);
+```text
+Create Ticket
+     ↓
+Save Ticket
+     ↓
+Create "CREATED" Activity
+     ↓
+Commit
 ```
 
-Hibernate generates a single SQL query with a `LEFT OUTER JOIN users`, reducing database round-trips from $1+N$ down to **exactly 1**.
+Similarly, assigning a ticket can update the assignee, change its status, and create an activity entry as one atomic operation.
+
+The service layer uses `@Transactional` for these workflows.
+
+Hibernate's dirty checking also allows changes to managed entities to be persisted when the transaction commits without requiring an explicit `save()` for every modification.
 
 ---
 
-## Transaction Management
+## Some Engineering Decisions
 
-Service methods performing multi-step state mutations are annotated with `@Transactional`:
-- **`createTicket`**: Persists the new `Ticket` entity and writes the initial `CREATED` `TicketActivity` audit record atomically.
-- **`assignTicket` / `assignTicketAndStart`**: Updates the assignee, modifies the status, and logs the `ASSIGNED` audit record within a single ACID transaction.
-- **`updateTicketStatus`**: Validates the state machine transition, modifies `status`, and logs `STATUS_CHANGED`.
-- **Dirty Checking**: Inside transaction boundaries, modifications to managed entities synchronize with the database on commit without requiring explicit `repository.save()` calls.
+### Why a Modular Monolith?
 
----
+I chose a modular monolith because the application has closely related data and workflows.
 
-## Audit Logging
+Tickets, users, projects, comments, and activities frequently participate in the same operations. Keeping them within one application makes transactions straightforward and avoids introducing network communication and distributed-system complexity before it is actually needed.
 
-Every structural ticket event creates an append-only [`TicketActivity`](file:///Users/ayesha/Downloads/ResolveHub/src/main/java/com/ayesha/resolvehub/entity/TicketActivity.java) record capturing:
-- `action`: `CREATED`, `STATUS_CHANGED`, `ASSIGNED`, `PRIORITY_CHANGED`
-- `description`: Human-readable event description
-- `oldValue` $\rightarrow$ `newValue`: State delta (e.g. `OPEN` $\rightarrow$ `IN_PROGRESS`)
-- `createdAt`: Immutable timestamp (`updatable = false`)
+If the system grew significantly, individual modules could later be separated based on actual scaling or ownership requirements.
 
----
+### Why PostgreSQL?
 
-## Key Engineering Decisions
+The data is strongly relational:
 
-### 1. Why Spring Boot & Modular Monolith?
-ResolveHub's domain has highly relational dependencies (Tickets $\rightarrow$ Projects $\rightarrow$ Users $\rightarrow$ Activities). A modular monolith provides ACID transactions, zero network latency between layers, and straightforward single-container deployment without the operational overhead of distributed microservices.
+```text
+User → Project → Ticket → Comments / Activities
+```
 
-### 2. Why PostgreSQL?
-Issue tracking requires strong relational integrity (foreign keys, cascading constraints) and ACID guarantees during status transitions and assignments. PostgreSQL provides robust B-Tree indexing, JSON support, and mature connection pooling.
+PostgreSQL provides the foreign keys, transactions, indexing, and querying capabilities that fit this model well.
 
-### 3. Why DTOs over Direct Entity Exposure?
-Returning JPA entities directly from `@RestController` causes `LazyInitializationException` outside active sessions, risks circular reference infinite loops during Jackson serialization, and leaks internal columns (such as password hashes). Strict Request/Response DTOs enforce a stable API contract.
+### Why DTOs?
 
-### 4. Why JPA Specifications over Combinatorial Repositories?
-Supporting 6 optional filters with standard repository query methods would require $2^6 = 64$ method signatures. JPA Specifications compose `CriteriaBuilder` predicates dynamically at runtime while remaining 100% type-safe.
+Controllers don't return JPA entities directly.
 
-### 5. Why `@EntityGraph` over Global EAGER Fetching?
-Setting global `FetchType.EAGER` causes massive unconstrained table joins across all queries. `@EntityGraph` allows keeping associations `LAZY` by default while overriding the fetch plan declaratively for specific endpoints.
+Using request and response DTOs helps keep the API contract separate from the persistence model and avoids exposing fields that shouldn't be part of the API.
 
-### 6. Why Whitelist Sorting?
-Passing arbitrary client strings into `Sort.by()` risks unexpected runtime query exceptions or internal property leakage. Validating sort properties against a strict whitelist ensures predictable, indexed database queries.
+It also prevents problems caused by lazy relationships during JSON serialization.
 
-### 7. Why HTTP Basic for this Implementation?
-HTTP Basic provides a clean, stateless authentication model for REST APIs and local development without the complexity of token signing, refresh tokens, and key rotation. In production, this can be transitioned to OAuth2/OIDC without altering the service or repository layers.
+### Why JPA Specifications?
+
+There are several optional ticket filters.
+
+With normal repository methods, combinations of these filters can quickly result in a large number of query methods.
+
+Specifications allow the filters to be composed only when they are actually provided:
+
+```text
+status
+   +
+priority
+   +
+project
+   +
+assignee
+   +
+search
+   +
+date range
+```
+
+This keeps the repository interface much smaller.
+
+### Why `@EntityGraph`?
+
+Relationships stay `LAZY` by default instead of making every query fetch everything.
+
+When a particular endpoint needs related data, an `@EntityGraph` can specify exactly what should be fetched.
+
+This gives more control over the SQL generated by Hibernate and helps avoid unnecessary N+1 queries.
+
+### Why Whitelist Sorting?
+
+The client can request a sort field, but it cannot choose an arbitrary entity property.
+
+Only known fields such as `createdAt`, `priority`, and `status` are accepted.
+
+This keeps the API predictable and prevents invalid sort properties from reaching the persistence layer.
+
+### Why HTTP Basic?
+
+For this project, HTTP Basic keeps authentication simple and stateless while allowing the security model and RBAC implementation to be demonstrated clearly.
+
+For a production deployment, I would replace this with OAuth2/OIDC or another token-based authentication mechanism rather than exposing Basic credentials over the network.
 
 ---
 
 ## Testing
 
-ResolveHub maintains a comprehensive automated test suite of **57 tests with a 100% pass rate**:
+ResolveHub currently has **57 automated tests**, all passing.
 
 ```bash
 mvn clean test
 ```
 
-| Test Layer | Test Class | Count | Scope & Purpose |
-|---|---|:---:|---|
-| **Security Integration** | `SecurityIntegrationTest` | 10 | HTTP Basic auth, RBAC permissions, 401/403 responses, Swagger public access |
-| **Web MVC** | `TicketControllerTest` | 14 | Request routing, validation annotations, DTO serialization, error mapping |
-| **Service Unit** | `TicketServiceTest` | 23 | Business logic, state transitions, assignment rules, activity logging |
-| **JPA Repository** | `TicketRepositoryTest` | 9 | Derived queries, `@EntityGraph`, JPA Specifications, H2 database interaction |
-| **Workflow Integration** | `TicketWorkflowIntegrationTest` | 1 | Full end-to-end multi-step ticket lifecycles |
-| **Total** | | **57** | **100% Pass Rate (0 Failures, 0 Errors, 0 Skipped)** |
+| Test Area  | Test Class                      |  Tests | What It Covers                                             |
+| ---------- | ------------------------------- | :----: | ---------------------------------------------------------- |
+| Security   | `SecurityIntegrationTest`       |   10   | Authentication, RBAC, 401/403, public Swagger endpoints    |
+| Controller | `TicketControllerTest`          |   14   | Routing, validation, serialization, error handling         |
+| Service    | `TicketServiceTest`             |   23   | Business rules, state transitions, assignments, activities |
+| Repository | `TicketRepositoryTest`          |    9   | Queries, Specifications, EntityGraph, H2                   |
+| Workflow   | `TicketWorkflowIntegrationTest` |    1   | End-to-end ticket lifecycle                                |
+| **Total**  |                                 | **57** | **All passing**                                            |
+
+The tests are split between unit tests, MVC tests, repository tests, security integration tests, and a full workflow integration test.
 
 ---
 
 ## API Documentation
 
-ResolveHub embeds **OpenAPI 3.0** documentation powered by Springdoc:
-- **Swagger UI**: [`http://localhost:8081/swagger-ui.html`](http://localhost:8081/swagger-ui.html)
-- **OpenAPI Schema**: [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs)
+ResolveHub uses Springdoc OpenAPI to generate API documentation.
 
-To test secured endpoints through Swagger UI, click the **Authorize** button and authenticate using HTTP Basic credentials.
+Once the backend is running:
+
+```text
+Swagger UI
+http://localhost:8081/swagger-ui.html
+
+OpenAPI JSON
+http://localhost:8081/v3/api-docs
+```
+
+Secured endpoints can be tested through Swagger UI using the **Authorize** button and the local HTTP Basic credentials.
 
 ---
 
 ## Running Locally
 
 ### Prerequisites
-- **Java 21 JDK**
-- **Maven 3.9+**
-- **PostgreSQL 17** (or run via Docker)
-- **Node.js 20+ & npm** (for frontend)
 
-### 1. Clone Repository
+Make sure you have:
+
+* Java 21
+* Maven 3.9+
+* PostgreSQL 17, or Docker
+* Node.js 20+
+* npm
+
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/ayesha19765/ResolveHub.git
 cd ResolveHub
 ```
 
-### 2. Configure Environment
+### 2. Configure environment variables
+
 ```bash
 cp .env.example .env
 ```
 
-### 3. Run Backend
+Update the values in `.env` if your local PostgreSQL configuration is different.
+
+### 3. Start the backend
+
 ```bash
 mvn spring-boot:run
 ```
-The backend starts on port `8081`.
 
-### 4. Run Frontend
+The backend runs on:
+
+```text
+http://localhost:8081
+```
+
+### 4. Start the frontend
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-The frontend dev server starts on [`http://localhost:5173`](http://localhost:5173).
+
+The frontend runs on:
+
+```text
+http://localhost:5173
+```
 
 ---
 
-## Docker
+## Running with Docker
 
-ResolveHub includes a complete Docker Compose environment orchestrating the Spring Boot application and PostgreSQL 17 database.
+The project also includes a Docker Compose setup for running the backend and PostgreSQL together.
 
 ```bash
-# Build and start all services in background
+# Build and start the application
 docker compose up --build -d
 
-# Inspect container health
+# Check container status
 docker compose ps
 
 # View application logs
 docker compose logs -f app
 
-# Stop containers while preserving persistent database volume
+# Stop containers
 docker compose down
 
-# Stop containers and wipe database volume
+# Stop containers and remove the database volume
 docker compose down -v
 ```
+
+The PostgreSQL data is stored in a persistent Docker volume unless the volume is explicitly removed.
 
 ---
 
 ## Configuration
 
-| Environment Variable | Default Value | Description |
-|---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/resolvehub` | PostgreSQL JDBC URL (`jdbc:postgresql://postgres:5432/resolvehub` in Compose) |
-| `DB_USERNAME` | `postgres` | Database username |
-| `DB_PASSWORD` | `password` | Database password |
-| `HIBERNATE_DDL_AUTO` | `update` | DDL generation mode (`update` in dev, `validate` in prod) |
-| `SHOW_SQL` | `false` | Log SQL queries to console |
-| `SPRING_PROFILES_ACTIVE`| `dev` | Active Spring profile (`dev`, `prod`, `test`) |
+The application reads the following environment variables:
+
+| Variable                 | Default                                       | Description               |
+| ------------------------ | --------------------------------------------- | ------------------------- |
+| `DB_URL`                 | `jdbc:postgresql://localhost:5432/resolvehub` | PostgreSQL connection URL |
+| `DB_USERNAME`            | `postgres`                                    | Database username         |
+| `DB_PASSWORD`            | `password`                                    | Database password         |
+| `HIBERNATE_DDL_AUTO`     | `update`                                      | Hibernate schema mode     |
+| `SHOW_SQL`               | `false`                                       | Enable SQL logging        |
+| `SPRING_PROFILES_ACTIVE` | `dev`                                         | Active Spring profile     |
+
+When running through Docker Compose, the database hostname is the PostgreSQL service name rather than `localhost`.
 
 ---
 
-## Design Trade-offs
+## Trade-offs
 
-- **Stateless REST vs Session Cookies**: Chose stateless Basic Auth without session cookies; explicitly disabled CSRF because ambient session cookies are not used.
-- **Criteria API vs QueryDSL**: Chose Spring Data JPA Specifications (native Criteria API) to avoid third-party annotation processing dependencies while retaining full type safety.
-- **Selective `@EntityGraph` vs Global Eager**: Kept all entity relationships `LAZY` to avoid accidental Cartesian joins, selectively applying `@EntityGraph` only where N+1 queries occur.
+A few decisions in the project were intentionally made for simplicity:
 
----
-
-## Limitations
-
-- **HTTP Basic Authentication**: Intended for local development and demonstration; a distributed production environment would typically use OAuth2 / OIDC.
-- **In-Memory Rate Limiting**: No distributed rate limiting or API throttling.
-- **Single-Node Execution**: Not configured for horizontal clustering across multiple JVM nodes.
+* **Basic Auth instead of OAuth2/OIDC** — keeps the authentication flow simple for this implementation.
+* **JPA Specifications instead of QueryDSL** — avoids adding another query-generation dependency while still supporting dynamic filtering.
+* **Selective `@EntityGraph` instead of EAGER relationships** — avoids fetching unnecessary data for unrelated endpoints.
+* **Single application instead of microservices** — the current domain doesn't justify the operational overhead of distributed services.
 
 ---
 
-## Future Improvements
+## Current Limitations
 
-- OAuth2 / JWT integration with asymmetric key rotation.
-- Asynchronous event publishing with Spring Application Events for audit history.
-- Redis caching for frequently queried ticket summary dashboards.
-- MinIO / S3 object storage for issue attachments and screenshots.
+ResolveHub is primarily a learning and portfolio project, so there are some things I would change for a larger production deployment:
+
+* HTTP Basic would be replaced with OAuth2/OIDC or JWT-based authentication.
+* There is no distributed rate limiting yet.
+* The application currently assumes a single-node deployment.
+* Audit events are written synchronously as part of the ticket transaction.
+
+---
+
+## Possible Next Steps
+
+Some improvements I'd consider next:
+
+* OAuth2 / OIDC authentication
+* Asynchronous audit event processing
+* Redis caching for frequently accessed dashboard data
+* File attachments using S3 or MinIO
+* Distributed rate limiting
+* Horizontal deployment with multiple application instances
+* More extensive performance testing
 
 ---
 
@@ -443,5 +620,7 @@ This project is licensed under the MIT License.
 
 ---
 
-**ResolveHub** · Java 21 · Spring Boot 3.5.5 · Spring Security 6 · React 18 · TypeScript · PostgreSQL 17 · Docker Compose  
+**ResolveHub**
+Java 21 · Spring Boot 3.5.5 · Spring Security 6 · React 18 · TypeScript · PostgreSQL 17 · Docker Compose
+
 © 2026 Ayesha
