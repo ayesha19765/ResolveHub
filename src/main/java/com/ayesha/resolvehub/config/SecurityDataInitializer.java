@@ -11,7 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("!test")
+@Profile("!test & !prod")
 public class SecurityDataInitializer implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SecurityDataInitializer.class);
